@@ -1,5 +1,6 @@
 import Navbar from "../components/layout/Navbar";
 import HeroSection from "../components/home/HeroSection";
+import FeaturedSection from "../components/home/FeaturedSection";
 
 export default function Home() {
   return (
@@ -10,9 +11,13 @@ export default function Home() {
       {/* Hero Section (Search-First) */}
       <HeroSection />
 
-      {/* Placeholder untuk section selanjutnya */}
-      <div id="pilihan-jokka" className="h-screen flex items-center justify-center bg-white">
-        <p className="text-gray-400">Section: Pilihan Jokka (Coming Soon)</p>
+      <FeaturedSection />
+
+      {/* Spacer Sementara (Agar halaman bisa discroll lebih jauh ke bawah) */}
+      <div className="h-[30vh] bg-gray-100 flex items-center justify-center border-t border-gray-200">
+        <p className="text-gray-400 italic">
+          Section selanjutnya: Kategori Wisata & Footer (Coming Soon)
+        </p>
       </div>
 
     </main>
