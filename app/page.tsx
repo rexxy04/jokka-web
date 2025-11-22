@@ -1,24 +1,22 @@
 import Navbar from "../components/layout/Navbar";
 import HeroSection from "../components/home/HeroSection";
 import FeaturedSection from "../components/home/FeaturedSection";
+import Footer from "../components/layout/Footer";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Navbar Global */}
+      {/* 1. Navbar Global */}
       <Navbar />
       
-      {/* Hero Section (Search-First) */}
+      {/* 2. Hero Section */}
       <HeroSection />
 
+      {/* 3. Featured Section (Bento Grid) */}
       <FeaturedSection />
 
-      {/* Spacer Sementara (Agar halaman bisa discroll lebih jauh ke bawah) */}
-      <div className="h-[30vh] bg-gray-100 flex items-center justify-center border-t border-gray-200">
-        <p className="text-gray-400 italic">
-          Section selanjutnya: Kategori Wisata & Footer (Coming Soon)
-        </p>
-      </div>
+      {/* 4. Footer (Bagian paling bawah) */}
+      <Footer />
 
     </main>
   );
