@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { db, storage } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import Navbar from '@/components/layout/Navbar'; // Biar tetap ada navigasi
+import Navbar from '@/components/public/Navbar'; // Biar tetap ada navigasi
 import Input from '@/components/ui/input'; // Reusable component kita
 import Button from '@/components/ui/Button';
 

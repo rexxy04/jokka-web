@@ -1,8 +1,8 @@
 import React from 'react';
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase"; 
-import DetailView from "@/components/layout/DetailView";
-import Navbar from "@/components/layout/Navbar";
+import DetailView from "@/components/public/DetailView";
+import Navbar from "@/components/public/Navbar";
 
 // 1. Kita update tipe datanya untuk memasukkan field baru
 interface PlaceDetail {

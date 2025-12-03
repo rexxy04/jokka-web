@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
-import Navbar from "../components/layout/Navbar";
-import Footer from "../components/layout/Footer";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -12,7 +10,7 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: "Jokka Web",
-  description: "Jelajahi keindahan kota dan event seru",
+  description: "Platform Wisata & Event Makassar",
 };
 
 export default function RootLayout({
@@ -21,19 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className="scroll-smooth"> 
-      {/* scroll-smooth agar saat klik link anchor (misal #hero) gerakannya halus */}
+    <html lang="id" className="scroll-smooth">
       <body className={`${poppins.variable} font-sans antialiased bg-gray-50`}>
-        
-        {/* 1. Navbar selalu di atas */}
-        <Navbar />
-        
-        {/* 2. Konten halaman (Page.tsx) dirender di sini */}
+        {/* Navbar & Footer DIHAPUS dari sini */}
         {children}
-
-        {/* 3. Footer selalu di bawah */}
-        <Footer />
-        
       </body>
     </html>
   );
