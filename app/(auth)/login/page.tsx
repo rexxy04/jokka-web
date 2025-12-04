@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import AuthCard from '@/components/public/AuthCard';
+import AuthCard from '@/components/public/AuthCard'; // Pastikan path import ini benar sesuai folder component kamu
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
+// Import Service Logic yang sudah kita buat
 import { loginService } from '@/lib/services/auth';
 
 export default function LoginPage() {
@@ -27,13 +28,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Panggil Service Login
+      // 1. Panggil Service Login (Logic Backend)
+      // Service ini akan mengembalikan object { user, role }
       const result = await loginService(formData.email, formData.password);
 
-      // --- SMART REDIRECT LOGIC ---
+      // 2. SMART REDIRECT LOGIC
+      // Arahkan user sesuai Role-nya
       if (result.role === 'admin') {
-        // Redirect ke Dashboard Admin
+        // Redirect ke Dashboard Admin (Nanti kita buat halamannya)
         router.push('/admin/dashboard'); 
+        // alert("Login sebagai Admin"); // Debugging sementara kalau halaman belum ada
       } else if (result.role === 'eo') {
         // Redirect ke Dashboard EO
         router.push('/eo/dashboard');
@@ -42,11 +46,9 @@ export default function LoginPage() {
         router.push('/');
       }
       
-      // (Opsional) Tampilkan notifikasi kecil
-      // alert(`Selamat datang, login sebagai ${result.role}`);
-
     } catch (error: any) {
-      alert(error.message); // Tampilkan pesan error (Pending/Salah password dll)
+      // Tampilkan pesan error (Email belum verifikasi / EO Pending / Password Salah)
+      alert(error.message); 
     } finally {
       setLoading(false);
     }
@@ -61,6 +63,7 @@ export default function LoginPage() {
             name="email"
             type="email"
             placeholder="Email"
+            value={formData.email}
             onChange={handleChange}
             required
           />
@@ -69,6 +72,7 @@ export default function LoginPage() {
             name="password"
             type="password"
             placeholder="Password"
+            value={formData.password}
             onChange={handleChange}
             required
           />
@@ -96,10 +100,11 @@ export default function LoginPage() {
 
         <div className="pt-2">
           <Button type="submit" variant="primary" className="w-full py-3" disabled={loading}>
-            {loading ? "Memproses..." : "Masuk"}
+            {loading ? "Sedang Memproses..." : "Masuk"}
           </Button>
         </div>
 
+        {/* Pemisah UI */}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-300"></div>
@@ -109,7 +114,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Tombol Google (Placeholder) */}
+        {/* Tombol Google Placeholder */}
         <div>
           <Button variant="outline" type="button" className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50">
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.16-7.27 3.46 0 6.64 1.9 8.05 3.36l2.37-2.37C20.25 3.38 16.69 2 12.16 2 6.64 2 2 6.64 2 12s4.64 10 10.16 10c7.47 0 10.65-5.1 10.65-10 0-.93-.14-1.46-.35-2.9z"/></svg>
@@ -117,6 +122,7 @@ export default function LoginPage() {
           </Button>
         </div>
 
+        {/* Link Register */}
         <div className="text-sm text-center mt-6">
           <span className="text-gray-600">Belum punya akun? </span>
           <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500 transition">
