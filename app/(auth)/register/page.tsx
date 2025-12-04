@@ -71,13 +71,29 @@ export default function RegisterPage() {
           </Button>
         </div>
 
-        <div className="text-sm text-center mt-6">
-          <span className="text-gray-600">Sudah punya akun? </span>
-          {/* Link ke Login */}
-          <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition">
-            Masuk di sini
-          </Link>
+
+        <div className="text-sm text-center mt-6"> 
+          {/* Bagian Login User Biasa */}
+          <div className="mb-4">
+            <span className="text-gray-600">Sudah punya akun? </span>
+            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition">
+              Masuk di sini
+            </Link>
+          </div>
+
+          {/* Bagian Link ke Register EO (Pemisah Garis) */}
+          <div className="pt-4 border-t border-gray-300/50">
+            <p className="text-gray-500 text-xs mb-1">Ingin menyelenggarakan event?</p>
+            <Link 
+              href="/register-eo" 
+              className="font-bold text-xs text-indigo-600 hover:text-indigo-500 transition uppercase tracking-wide border border-indigo-100 bg-indigo-50 px-3 py-2 rounded-lg inline-block hover:bg-indigo-100"
+            >
+              Daftar sebagai Partner EO 🚀
+            </Link>
+          </div>
+          
         </div>
+
       </form>
     </AuthCard>
   );
