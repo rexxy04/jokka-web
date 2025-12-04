@@ -1,22 +1,30 @@
 import { auth, db } from '@/lib/firebase';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, 
+  signOut,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  updateProfile
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+// ==========================================
+// 1. SERVICE LOGIN (Smart Login Logic)
+// ==========================================
+// Fungsi ini menangani login dan pengecekan Role (User/EO/Admin)
 export const loginService = async (email: string, password: string) => {
   try {
-    // 1. Login ke Firebase Auth (Cek Email & Password)
+    // A. Login ke Firebase Auth
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // 2. Cek Apakah Email Belum Diverifikasi?
-    // (Opsional: Jika dosen mewajibkan verifikasi email sebelum login)
+    // B. Cek Verifikasi Email (Opsional, tapi disarankan untuk keamanan)
     if (!user.emailVerified) {
-      // Kita logout lagi biar dia gak bisa masuk
       await signOut(auth);
       throw new Error("Email Anda belum diverifikasi. Silakan cek inbox email Anda.");
     }
 
-    // 3. Cek Apakah Dia EO? (Cek ke collection 'eos')
+    // C. Cek Apakah Dia EO? (Cek ke collection 'eos')
     const eoDocRef = doc(db, 'eos', user.uid);
     const eoSnap = await getDoc(eoDocRef);
 
@@ -25,7 +33,7 @@ export const loginService = async (email: string, password: string) => {
       
       // Cek Status EO
       if (eoData.status === 'pending_verification') {
-        await signOut(auth); // Tendang keluar
+        await signOut(auth);
         throw new Error("Akun EO Anda sedang direview oleh Admin. Mohon tunggu 1x24 jam.");
       }
       
@@ -38,14 +46,13 @@ export const loginService = async (email: string, password: string) => {
       return { user, role: 'eo' };
     }
 
-    // 4. Cek Apakah Dia Admin? 
-    // (Cara sederhana: Cek email khusus atau collection 'admins')
-    // Untuk tugas ini, kita anggap email tertentu adalah admin
+    // D. Cek Apakah Dia Admin? 
+    // (Logic sederhana: Hardcode email admin. Untuk production bisa pakai custom claims atau collection admin)
     if (email === 'admin@jokka.com') { 
        return { user, role: 'admin' };
     }
 
-    // 5. Jika bukan EO dan bukan Admin, berarti USER BIASA
+    // E. Jika bukan EO dan bukan Admin, berarti USER BIASA
     return { user, role: 'user' };
 
   } catch (error: any) {
@@ -54,6 +61,50 @@ export const loginService = async (email: string, password: string) => {
     if (error.code === 'auth/invalid-credential') message = "Email atau password salah.";
     if (error.code === 'auth/user-not-found') message = "Akun tidak ditemukan.";
     if (error.code === 'auth/wrong-password') message = "Password salah.";
+    
+    throw new Error(message);
+  }
+};
+
+// ==========================================
+// 2. SERVICE REGISTER USER BIASA
+// ==========================================
+// Fungsi ini khusus untuk pendaftaran pengunjung biasa (bukan EO)
+export const registerUserService = async (formData: any) => {
+  try {
+    // A. Buat user di Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(
+      auth, 
+      formData.email, 
+      formData.password
+    );
+    const user = userCredential.user;
+
+    // B. Update Nama Display di Auth (agar muncul di Navbar nanti)
+    await updateProfile(user, {
+      displayName: formData.fullname
+    });
+
+    // C. Simpan data user ke Firestore (Collection 'users')
+    // Kita pisahkan: User Biasa -> 'users', EO -> 'eos'
+    await setDoc(doc(db, "users", user.uid), {
+      uid: user.uid,
+      fullname: formData.fullname,
+      username: formData.username,
+      email: formData.email,
+      role: 'user',
+      createdAt: serverTimestamp(),
+    });
+
+    // D. Kirim Email Verifikasi
+    await sendEmailVerification(user);
+
+    return { success: true, user };
+
+  } catch (error: any) {
+    let message = error.message;
+    if (error.code === 'auth/email-already-in-use') message = "Email sudah terdaftar.";
+    if (error.code === 'auth/weak-password') message = "Password terlalu lemah (min. 6 karakter).";
     
     throw new Error(message);
   }
