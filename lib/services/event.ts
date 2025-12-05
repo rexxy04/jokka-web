@@ -1,7 +1,39 @@
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+
+export const getPublishedEvents = async () => {
+  try {
+    const q = query(
+      collection(db, "events"), 
+      where("status", "==", "published") // Hanya yang sudah diapprove
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+  } catch (error) {
+    console.error("Error fetching events:", error);
+    return [];
+  }
+};
+
+// Ambil event berdasarkan BULAN tertentu
+export const getEventsByMonth = async (monthIndex: number, year: number) => {
+  try {
+    // Logic: Ambil semua published dulu, lalu filter tanggal di client side (JavaScript)
+    // Kenapa? Karena format tanggal di Firestore kita string ISO, query range kadang tricky.
+    // Untuk skala kecil/menengah ini sangat cepat dan aman.
+    
+    const allEvents = await getPublishedEvents();
+
+    return allEvents.filter(event => {
+      const eventDate = new Date(event.startDate);
+      return eventDate.getMonth() === monthIndex && eventDate.getFullYear() === year;
+    });
+  } catch (error) {
+    return [];
+  }
+};
 // Tipe Data untuk Input Event
 export interface EventFormData {
   title: string;
