@@ -9,7 +9,7 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // ==========================================
-// 1. SERVICE LOGIN (REVISI: Dynamic Admin)
+// 1. SERVICE LOGIN (Smart Login Logic - DYNAMIC)
 // ==========================================
 export const loginService = async (email: string, password: string) => {
   try {
@@ -34,15 +34,18 @@ export const loginService = async (email: string, password: string) => {
         await signOut(auth);
         throw new Error("Akun EO Anda sedang direview oleh Admin. Mohon tunggu 1x24 jam.");
       }
+      
       if (eoData.status === 'rejected') {
         await signOut(auth);
         throw new Error("Mohon maaf, pendaftaran EO Anda ditolak.");
       }
+
+      // Jika Verified, return role EO
       return { user, role: 'eo' };
     }
 
     // D. CEK DI COLLECTION 'USERS' (Admin atau User Biasa?)
-    // --- UPDATED LOGIC ---
+    // --- LOGIC DINAMIS: Cek field 'role' di database ---
     const userDocRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userDocRef);
 
@@ -58,7 +61,7 @@ export const loginService = async (email: string, password: string) => {
       return { user, role: 'user' };
     }
 
-    // Fallback (Jaga-jaga jika data di firestore tidak ada)
+    // Fallback (Default User)
     return { user, role: 'user' };
 
   } catch (error: any) {
@@ -71,14 +74,22 @@ export const loginService = async (email: string, password: string) => {
   }
 };
 
-// ... (Kode registerUserService dan getUserProfile biarkan sama seperti sebelumnya) ...
-// Pastikan kamu tidak menghapus kode sisanya di bawah sini.
-// Copy paste saja fungsi registerUserService dan getUserProfile dari chat sebelumnya jika hilang.
+// ==========================================
+// 2. SERVICE REGISTER USER BIASA
+// ==========================================
 export const registerUserService = async (formData: any) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+    const userCredential = await createUserWithEmailAndPassword(
+      auth, 
+      formData.email, 
+      formData.password
+    );
     const user = userCredential.user;
-    await updateProfile(user, { displayName: formData.fullname });
+
+    await updateProfile(user, {
+      displayName: formData.fullname
+    });
+
     await setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
       fullname: formData.fullname,
@@ -87,23 +98,36 @@ export const registerUserService = async (formData: any) => {
       role: 'user', // Default user biasa
       createdAt: serverTimestamp(),
     });
+
     await sendEmailVerification(user);
+
     return { success: true, user };
+
   } catch (error: any) {
-    throw new Error(error.message);
+    let message = error.message;
+    if (error.code === 'auth/email-already-in-use') message = "Email sudah terdaftar.";
+    if (error.code === 'auth/weak-password') message = "Password terlalu lemah (min. 6 karakter).";
+    
+    throw new Error(message);
   }
 };
 
+// ==========================================
+// 3. GET USER PROFILE (Untuk Layout Protection)
+// ==========================================
 export const getUserProfile = async (uid: string) => {
   try {
+    // Cek EO
     const eoSnap = await getDoc(doc(db, "eos", uid));
     if (eoSnap.exists()) return eoSnap.data();
 
+    // Cek User/Admin
     const userSnap = await getDoc(doc(db, "users", uid));
     if (userSnap.exists()) return userSnap.data();
 
     return null;
   } catch (error) {
+    console.error("Error fetching profile:", error);
     return null;
   }
 };
