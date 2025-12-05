@@ -9,29 +9,27 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // ==========================================
-// 1. SERVICE LOGIN (Smart Login Logic)
+// 1. SERVICE LOGIN (Smart Login Logic - DYNAMIC)
 // ==========================================
-// Fungsi ini menangani login dan pengecekan Role (User/EO/Admin)
 export const loginService = async (email: string, password: string) => {
   try {
     // A. Login ke Firebase Auth
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // B. Cek Verifikasi Email (Opsional, tapi disarankan untuk keamanan)
+    // B. Cek Verifikasi Email
     if (!user.emailVerified) {
       await signOut(auth);
       throw new Error("Email Anda belum diverifikasi. Silakan cek inbox email Anda.");
     }
 
-    // C. Cek Apakah Dia EO? (Cek ke collection 'eos')
+    // C. CEK DI COLLECTION 'EOS' (Apakah dia EO?)
     const eoDocRef = doc(db, 'eos', user.uid);
     const eoSnap = await getDoc(eoDocRef);
 
     if (eoSnap.exists()) {
       const eoData = eoSnap.data();
       
-      // Cek Status EO
       if (eoData.status === 'pending_verification') {
         await signOut(auth);
         throw new Error("Akun EO Anda sedang direview oleh Admin. Mohon tunggu 1x24 jam.");
@@ -46,17 +44,27 @@ export const loginService = async (email: string, password: string) => {
       return { user, role: 'eo' };
     }
 
-    // D. Cek Apakah Dia Admin? 
-    // (Logic sederhana: Hardcode email admin. Untuk production bisa pakai custom claims atau collection admin)
-    if (email === 'admin@jokka.com') { 
-       return { user, role: 'admin' };
+    // D. CEK DI COLLECTION 'USERS' (Admin atau User Biasa?)
+    // --- LOGIC DINAMIS: Cek field 'role' di database ---
+    const userDocRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userDocRef);
+
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      
+      // Jika di database role-nya 'admin', maka login sebagai admin
+      if (userData.role === 'admin') {
+        return { user, role: 'admin' };
+      }
+      
+      // Jika role-nya 'user' atau lainnya
+      return { user, role: 'user' };
     }
 
-    // E. Jika bukan EO dan bukan Admin, berarti USER BIASA
+    // Fallback (Default User)
     return { user, role: 'user' };
 
   } catch (error: any) {
-    // Parsing error message dari Firebase biar enak dibaca user
     let message = error.message;
     if (error.code === 'auth/invalid-credential') message = "Email atau password salah.";
     if (error.code === 'auth/user-not-found') message = "Akun tidak ditemukan.";
@@ -69,10 +77,8 @@ export const loginService = async (email: string, password: string) => {
 // ==========================================
 // 2. SERVICE REGISTER USER BIASA
 // ==========================================
-// Fungsi ini khusus untuk pendaftaran pengunjung biasa (bukan EO)
 export const registerUserService = async (formData: any) => {
   try {
-    // A. Buat user di Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(
       auth, 
       formData.email, 
@@ -80,23 +86,19 @@ export const registerUserService = async (formData: any) => {
     );
     const user = userCredential.user;
 
-    // B. Update Nama Display di Auth (agar muncul di Navbar nanti)
     await updateProfile(user, {
       displayName: formData.fullname
     });
 
-    // C. Simpan data user ke Firestore (Collection 'users')
-    // Kita pisahkan: User Biasa -> 'users', EO -> 'eos'
     await setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
       fullname: formData.fullname,
       username: formData.username,
       email: formData.email,
-      role: 'user',
+      role: 'user', // Default user biasa
       createdAt: serverTimestamp(),
     });
 
-    // D. Kirim Email Verifikasi
     await sendEmailVerification(user);
 
     return { success: true, user };
@@ -113,20 +115,15 @@ export const registerUserService = async (formData: any) => {
 // ==========================================
 // 3. GET USER PROFILE (Untuk Layout Protection)
 // ==========================================
-// Fungsi ini dipanggil di layout.tsx admin/eo untuk memastikan user berhak masuk
 export const getUserProfile = async (uid: string) => {
   try {
-    // A. Cek di collection 'eos'
+    // Cek EO
     const eoSnap = await getDoc(doc(db, "eos", uid));
     if (eoSnap.exists()) return eoSnap.data();
 
-    // B. Cek di collection 'users'
+    // Cek User/Admin
     const userSnap = await getDoc(doc(db, "users", uid));
     if (userSnap.exists()) return userSnap.data();
-
-    // C. Cek Hardcode Admin (Fallback jika tidak ada di DB)
-    const user = auth.currentUser;
-    if (user?.email === 'admin@jokka.com') return { role: 'admin' };
 
     return null;
   } catch (error) {
