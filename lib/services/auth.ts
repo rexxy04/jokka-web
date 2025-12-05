@@ -109,3 +109,28 @@ export const registerUserService = async (formData: any) => {
     throw new Error(message);
   }
 };
+
+// ==========================================
+// 3. GET USER PROFILE (Untuk Layout Protection)
+// ==========================================
+// Fungsi ini dipanggil di layout.tsx admin/eo untuk memastikan user berhak masuk
+export const getUserProfile = async (uid: string) => {
+  try {
+    // A. Cek di collection 'eos'
+    const eoSnap = await getDoc(doc(db, "eos", uid));
+    if (eoSnap.exists()) return eoSnap.data();
+
+    // B. Cek di collection 'users'
+    const userSnap = await getDoc(doc(db, "users", uid));
+    if (userSnap.exists()) return userSnap.data();
+
+    // C. Cek Hardcode Admin (Fallback jika tidak ada di DB)
+    const user = auth.currentUser;
+    if (user?.email === 'admin@jokka.com') return { role: 'admin' };
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    return null;
+  }
+};
