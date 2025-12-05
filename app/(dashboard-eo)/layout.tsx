@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import SidebarEO from '@/components/eo/sidebarEO';
+import SidebarEO from '@/components/eo/SidebarEO';
 
 export default function EOLayout({
   children,
