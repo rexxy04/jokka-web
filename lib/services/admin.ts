@@ -65,3 +65,64 @@ export const rejectEO = async (eoId: string) => {
     throw new Error("Gagal menolak EO");
   }
 };
+
+// --- MANAGEMENT EVENT ---
+
+export interface EventData {
+  id: string;
+  title: string;
+  category: string;
+  startDate: string;
+  poster: string;
+  organizerId: string;
+  status: string;
+  locationName: string;
+}
+
+// 1. Ambil Event yang Pending Review
+export const getPendingEvents = async () => {
+  try {
+    const q = query(
+      collection(db, "events"), 
+      where("status", "==", "pending_review")
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const events: EventData[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      events.push({ id: doc.id, ...doc.data() } as EventData);
+    });
+    
+    return events;
+  } catch (error) {
+    console.error("Error fetching pending events:", error);
+    return [];
+  }
+};
+
+// 2. Approve Event (Ubah jadi Published) -> MUNCUL DI WEB
+export const approveEvent = async (eventId: string) => {
+  try {
+    const eventRef = doc(db, "events", eventId);
+    await updateDoc(eventRef, {
+      status: 'published' 
+    });
+    return true;
+  } catch (error) {
+    throw new Error("Gagal menyetujui event");
+  }
+};
+
+// 3. Reject Event (Tolak)
+export const rejectEvent = async (eventId: string) => {
+  try {
+    const eventRef = doc(db, "events", eventId);
+    await updateDoc(eventRef, {
+      status: 'rejected'
+    });
+    return true;
+  } catch (error) {
+    throw new Error("Gagal menolak event");
+  }
+};
