@@ -31,7 +31,8 @@ export default function LoginPage() {
       // 1. Panggil Service Login (Logic Backend)
       // Service ini akan mengembalikan object { user, role }
       const result = await loginService(formData.email, formData.password);
-
+      
+      console.log("LOGIN RESULT:", result);
       // 2. SMART REDIRECT LOGIC
       // Arahkan user sesuai Role-nya
       if (result.role === 'admin') {
