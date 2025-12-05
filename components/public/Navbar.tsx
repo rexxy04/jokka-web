@@ -1,27 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Button from '../ui/Button'; 
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import Button from '@/components/ui/Button'; 
 
 const Navbar = () => {
-  // State untuk mengatur buka/tutup menu mobile
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Listener status login
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fungsi Logout (Opsional: bisa dipasang di dropdown avatar nanti)
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push('/');
+    setIsOpen(false);
+  };
+
+  // Helper: Ambil Inisial Nama (Misal: "Dylan" -> "D")
+  const getInitials = (name: string | null) => {
+    return name ? name.charAt(0).toUpperCase() : "U";
+  };
 
   return (
-    // Navbar Container: Fixed di atas, Glassmorphism (blur), ada shadow halus
     <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100 transition-all duration-300">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-4">
           
-          {/* --- LOGO --- */}
+          {/* LOGO */}
           <div className="text-2xl font-bold text-blue-600 z-50 relative">
             <Link href="/" onClick={() => setIsOpen(false)}>
               Jokka<span className="text-gray-800">.</span>
             </Link>
           </div>
 
-          {/* --- DESKTOP MENU (Hidden di Mobile) --- */}
+          {/* DESKTOP MENU */}
           <div className="hidden md:flex items-center space-x-8">
             <Link href="/" className="text-gray-600 hover:text-blue-600 font-medium transition">
               Home
@@ -32,39 +57,49 @@ const Navbar = () => {
             <Link href="/event" className="text-gray-600 hover:text-blue-600 font-medium transition">
               Event
             </Link>
-            {/* LINK BARU */}
             <Link href="/kalender-event" className="text-gray-600 hover:text-blue-600 font-medium transition">
               Kalender Event
             </Link>
           </div>
 
-          {/* --- DESKTOP AUTH BUTTONS --- */}
+          {/* AUTH SECTION (LOGIC UTAMA DISINI) */}
           <div className="hidden md:flex items-center space-x-4">
-            {/* Link ke Login */}
-            <Link href="/login" className="text-gray-600 hover:text-blue-600 font-medium px-4 py-2 transition">
-              Masuk
-            </Link>
-            {/* Tombol ke Register (Pakai component Button) */}
-            <Button href="/register" variant="primary" className="shadow-none">
-              Daftar
-            </Button>
+            {loading ? (
+              // Skeleton loading kecil kalau status auth belum siap
+              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+            ) : user ? (
+              // JIKA LOGIN: Tampilkan Avatar Profil
+              <Link href="/profile" className="flex items-center gap-3 group">
+                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition">
+                  Halo, {user.displayName || "User"}
+                </span>
+                <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-600 font-bold text-lg shadow-sm group-hover:shadow-md transition">
+                  {getInitials(user.displayName)}
+                </div>
+              </Link>
+            ) : (
+              // JIKA BELUM LOGIN: Tombol Masuk/Daftar
+              <>
+                <Link href="/login" className="text-gray-600 hover:text-blue-600 font-medium px-4 py-2 transition">
+                  Masuk
+                </Link>
+                <Button href="/register" variant="primary" className="shadow-none">
+                  Daftar
+                </Button>
+              </>
+            )}
           </div>
 
-          {/* --- MOBILE MENU BUTTON (Hamburger) --- */}
+          {/* MOBILE MENU BUTTON */}
           <div className="md:hidden z-50 relative">
             <button 
               onClick={() => setIsOpen(!isOpen)} 
               className="text-gray-600 hover:text-blue-600 focus:outline-none p-2"
             >
-              {/* Logika Ganti Icon: Kalau buka tampil X, kalau tutup tampil Garis 3 */}
               {isOpen ? (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               ) : (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" />
-                </svg>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
               )}
             </button>
           </div>
@@ -72,52 +107,35 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* --- MOBILE MENU DROPDOWN --- */}
-      {/* Hanya muncul jika state isOpen bernilai TRUE */}
+      {/* MOBILE MENU DROPDOWN */}
       {isOpen && (
         <div className="md:hidden absolute top-full left-0 w-full bg-white border-b border-gray-100 shadow-xl flex flex-col p-4 space-y-4 animate-fadeIn">
-          <Link 
-            href="/" 
-            className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50"
-            onClick={() => setIsOpen(false)}
-          >
-            Home
-          </Link>
-          <Link 
-            href="/destinasi" 
-            className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50"
-            onClick={() => setIsOpen(false)}
-          >
-            Destinasi
-          </Link>
-          <Link 
-            href="/event" 
-            className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50"
-            onClick={() => setIsOpen(false)}
-          >
-            Event
-          </Link>
-
-          <Link 
-            href="/kalender-event" 
-            className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50"
-            onClick={() => setIsOpen(false)}
-          >
-            Kalender Event
-          </Link>
+          <Link href="/" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Home</Link>
+          <Link href="/destinasi" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Destinasi</Link>
+          <Link href="/event" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Event</Link>
+          <Link href="/kalender-event" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Kalender Event</Link>
           
-          {/* Mobile Auth Buttons */}
           <div className="flex flex-col gap-3 pt-2">
-            <Link 
-              href="/login" 
-              className="text-center text-gray-600 font-medium py-2 border border-gray-200 rounded-lg"
-              onClick={() => setIsOpen(false)}
-            >
-              Masuk
-            </Link>
-            <Button href="/register" variant="primary" className="w-full justify-center">
-              Daftar Sekarang
-            </Button>
+            {user ? (
+              // Mobile View jika Login
+              <>
+                <Link href="/profile" className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg text-blue-800 font-bold" onClick={() => setIsOpen(false)}>
+                  <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-sm">
+                    {getInitials(user.displayName)}
+                  </div>
+                  Profil Saya
+                </Link>
+                <button onClick={handleLogout} className="text-left text-red-600 font-medium py-2 px-3 hover:bg-red-50 rounded-lg transition">
+                  Keluar
+                </button>
+              </>
+            ) : (
+              // Mobile View jika Belum Login
+              <>
+                <Link href="/login" className="text-center text-gray-600 font-medium py-2 border border-gray-200 rounded-lg" onClick={() => setIsOpen(false)}>Masuk</Link>
+                <Button href="/register" variant="primary" className="w-full justify-center">Daftar Sekarang</Button>
+              </>
+            )}
           </div>
         </div>
       )}
