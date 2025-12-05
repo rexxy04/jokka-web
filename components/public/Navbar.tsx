@@ -32,8 +32,9 @@ const Navbar = () => {
             <Link href="/event" className="text-gray-600 hover:text-blue-600 font-medium transition">
               Event
             </Link>
-            <Link href="/#pilihan-jokka" className="text-gray-600 hover:text-blue-600 font-medium transition">
-              Pilihan Editor
+            {/* LINK BARU */}
+            <Link href="/kalender-event" className="text-gray-600 hover:text-blue-600 font-medium transition">
+              Kalender Event
             </Link>
           </div>
 
@@ -95,6 +96,14 @@ const Navbar = () => {
             onClick={() => setIsOpen(false)}
           >
             Event
+          </Link>
+
+          <Link 
+            href="/kalender-event" 
+            className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50"
+            onClick={() => setIsOpen(false)}
+          >
+            Kalender Event
           </Link>
           
           {/* Mobile Auth Buttons */}
