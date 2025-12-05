@@ -2,25 +2,32 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth } from '@/lib/firebase'; // Untuk ambil ID EO yang sedang login
+import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import Input from '@/components/ui/input'; // Perhatikan huruf kecil/besar sesuai file kamu
-import Button from '@/components/ui/Button';
-import FileInput from '@/components/ui/FileInput'; // Pastikan komponen ini ada
+import { getUserProfile } from '@/lib/services/auth'; // <--- Import Logic Cek Profil
 import { createEvent, EventFormData } from '@/lib/services/event';
+
+// Import UI Components
+import Input from '@/components/ui/input'; 
+import Button from '@/components/ui/Button';
+import FileInput from '@/components/ui/FileInput';
 
 export default function CreateEventPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [eoProfile, setEoProfile] = useState<any>(null); // State simpan profil EO
 
-  // Cek User Login
+  // Cek User Login & Ambil Profil
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        // Ambil data profil dari Firestore untuk cek status 'verified'
+        const profile = await getUserProfile(currentUser.uid);
+        setEoProfile(profile);
       } else {
-        router.push('/login'); // Kalau gak login, tendang
+        router.push('/login');
       }
     });
     return () => unsubscribe();
@@ -30,11 +37,11 @@ export default function CreateEventPage() {
   const [formData, setFormData] = useState<EventFormData>({
     title: '',
     description: '',
-    category: 'Musik', // Default
+    category: 'Musik',
     locationName: '',
     startDate: '',
     endDate: '',
-    ticketName: 'Regular', // Default tiket
+    ticketName: 'Regular',
     ticketPrice: 0,
     ticketStock: 100,
   });
@@ -51,14 +58,24 @@ export default function CreateEventPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. CEK STATUS EO (KEAMANAN)
+    if (eoProfile?.status !== 'verified') {
+      alert("⚠️ AKSES DITOLAK\n\nAkun Anda belum diverifikasi oleh Admin.\nAnda belum bisa membuat event.");
+      return;
+    }
+
+    // 2. Validasi Input
     if (!poster) return alert("Wajib upload poster event!");
     if (!user) return alert("Sesi habis, silakan login ulang.");
 
     setLoading(true);
     try {
+      // 3. Panggil Service Create Event
       await createEvent(formData, poster, user.uid);
+      
       alert("Event berhasil dibuat! Menunggu persetujuan Admin.");
-      router.push('/eo/my-events'); // Redirect ke list event (nanti kita buat)
+      router.push('/eo/my-events'); // Redirect ke list event
     } catch (error: any) {
       alert(error.message);
     } finally {

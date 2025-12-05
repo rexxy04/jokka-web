@@ -1,14 +1,55 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { getUserProfile } from '@/lib/services/auth';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false); // Default terkunci
+
+  useEffect(() => {
+    // Listener Auth: Cek setiap kali status login berubah
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // Kalau gak login, tendang ke login
+        router.push('/login');
+      } else {
+        // Kalau login, cek role-nya di database
+        const profile = await getUserProfile(user.uid);
+        
+        if (profile?.role === 'admin') {
+          setAuthorized(true); // Buka kunci
+        } else {
+          // Kalau bukan admin, tendang ke Home
+          alert("Anda tidak memiliki akses ke halaman Admin!");
+          router.push('/');
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
+  // Tampilkan Loading selagi mengecek (Biar konten admin gak bocor)
+  if (!authorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-gray-500">Memeriksa akses Admin...</p>
+      </div>
+    );
+  }
+
+  // Jika lolos, tampilkan Sidebar & Konten
   return (
     <div className="min-h-screen flex bg-gray-100">
-      {/* SIDEBAR ADMIN */}
       <aside className="w-64 bg-gray-900 text-white p-6 hidden md:block">
         <h2 className="text-xl font-bold mb-6 tracking-wide">
           Admin Jokka<span className="text-blue-500">.</span>
@@ -17,9 +58,11 @@ export default function AdminLayout({
           <Link href="/admin/dashboard" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             Dashboard
           </Link>
-          {/* MENU BARU KITA */}
           <Link href="/admin/approvals" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             👮‍♂️ Approval EO
+          </Link>
+          <Link href="/admin/event-approvals" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
+            🎫 Approval Event
           </Link>
           <Link href="/admin/manage-wisata" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             🏖️ Kelola Wisata
@@ -32,7 +75,6 @@ export default function AdminLayout({
         </nav>
       </aside>
       
-      {/* KONTEN UTAMA */}
       <main className="flex-1 p-8 overflow-y-auto">
         {children}
       </main>
