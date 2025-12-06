@@ -1,5 +1,7 @@
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, serverTimestamp} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 
 // Definisi Tipe Data EO sesuai yang disimpan saat Register
 export interface EOData {
@@ -13,6 +15,45 @@ export interface EOData {
   documents: { [key: string]: string }; // Map URL dokumen (nib, npwp, dll)
   createdAt: any;
 }
+
+// --- SERVICE: TAMBAH WISATA ---
+export interface PlaceFormData {
+  name: string;
+  category: string;
+  rating: string;
+  description: string;
+  location: string;
+  price: string;
+}
+
+export const addPlace = async (formData: PlaceFormData, imageFile: File) => {
+  try {
+    // 1. Upload Gambar
+    // Path: places/{timestamp}-{filename}
+    const storageRef = ref(storage, `places/${Date.now()}-${imageFile.name}`);
+    const snapshot = await uploadBytes(storageRef, imageFile);
+    const imageUrl = await getDownloadURL(snapshot.ref);
+
+    // 2. Simpan ke Firestore
+    await addDoc(collection(db, "places"), {
+      name: formData.name,
+      category: formData.category,
+      rating: formData.rating,
+      description: formData.description,
+      location: formData.location, // Field baru
+      price: formData.price,       // Field baru
+      image: imageUrl,
+      isFeatured: false, // Default false
+      createdAt: serverTimestamp()
+    });
+
+    return { success: true };
+
+  } catch (error: any) {
+    console.error("Error adding place:", error);
+    throw new Error(error.message || "Gagal menambahkan wisata.");
+  }
+};
 
 // --- DASHBOARD STATS SERVICE ---
 export const getAdminStats = async () => {
@@ -57,6 +98,36 @@ export const getAdminStats = async () => {
   } catch (error) {
     console.error("Error fetching admin stats:", error);
     return { pendingEO: 0, activeEO: 0, totalPlaces: 0, totalTicketsSold: 0 };
+  }
+};
+
+// 1. Ambil Semua Wisata (Untuk Tabel Admin)
+export const getAllPlaces = async () => {
+  try {
+    // Ambil dari collection 'places'
+    // Kita urutkan manual di client nanti biar fleksibel
+    const q = collection(db, "places");
+    const querySnapshot = await getDocs(q);
+    
+    const places: any[] = [];
+    querySnapshot.forEach((doc) => {
+      places.push({ id: doc.id, ...doc.data() });
+    });
+    
+    return places;
+  } catch (error) {
+    console.error("Error fetching places:", error);
+    return [];
+  }
+};
+
+// 2. Hapus Wisata
+export const deletePlace = async (placeId: string) => {
+  try {
+    await deleteDoc(doc(db, "places", placeId));
+    return true;
+  } catch (error) {
+    throw new Error("Gagal menghapus wisata");
   }
 };
 
