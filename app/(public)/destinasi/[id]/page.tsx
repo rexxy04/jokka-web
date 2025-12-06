@@ -1,10 +1,9 @@
 import React from 'react';
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase"; 
-import DetailView from "@/components/public/DetailView";
+import DetailView from "@/components/public/DetailView"; 
 import Navbar from "@/components/public/Navbar";
 
-// 1. Kita update tipe datanya untuk memasukkan field baru
 interface PlaceDetail {
   id: string;
   name: string;
@@ -12,8 +11,11 @@ interface PlaceDetail {
   image: string;
   rating?: string;
   description?: string;
-  location?: string; // Field baru dari DB
-  price?: string;    // Field baru dari DB
+  location?: string; 
+  price?: string;    
+  // Tambahan Koordinat
+  lat?: number;
+  lng?: number;
 }
 
 async function getPlaceById(id: string) {
@@ -48,23 +50,22 @@ export default async function DestinasiDetailPage({
 
   return (
     <main>
-      <Navbar />
+      {/* Navbar otomatis ada di layout, tapi kalau struktur file kamu beda, boleh pakai ini */}
       
-      {/* 2. Masukkan data dari variable 'place' ke props komponen */}
       <DetailView 
         id={place.id}
+        type="place"
         title={place.name}
         image={place.image}
         category={place.category}
         rating={place.rating}
-        
-        // Menggunakan operator || (OR) sebagai Fallback
-        // Artinya: "Coba ambil dari DB, kalau kosong, pakai teks default sebelah kanan"
-        description={place.description || "Deskripsi belum tersedia untuk tempat ini."}
-        
-        // Fetch Location & Price dari Firestore
+        description={place.description || "Deskripsi belum tersedia."}
         location={place.location || "Makassar, Indonesia"} 
         price={place.price || "Gratis / Belum ada info"}
+        
+        // --- KIRIM KOORDINAT ---
+        lat={place.lat}
+        lng={place.lng}
       />
     </main>
   );

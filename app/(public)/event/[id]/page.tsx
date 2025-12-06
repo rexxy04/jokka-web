@@ -10,6 +10,9 @@ interface EventDetail {
   poster: string;
   description: string;
   locationName: string;
+  // Tambahan Koordinat
+  lat?: number;
+  lng?: number;
   startDate: string;
   endDate: string;
   tickets?: { name: string; price: number; stock: number }[];
@@ -72,7 +75,6 @@ export default async function EventDetailPage({
     ? formatPrice(event.tickets[0].price) 
     : "Info Harga Menyusul";
 
-  // Ambil harga angka murni (misal: 50000)
   const rawPriceData = event.tickets && event.tickets.length > 0 
     ? event.tickets[0].price 
     : 0;
@@ -81,17 +83,20 @@ export default async function EventDetailPage({
     <main>
       <DetailView 
         id={event.id}
+        type="event"
         title={event.title}
         image={event.poster}
         category={event.category}
         description={event.description}
         location={event.locationName}
         date={formatDate(event.startDate)}
-        price={ticketInfo} // Ini string "Rp 50.000" (untuk tampilan)
+        price={ticketInfo}
+        eventId={event.id}
+        rawPrice={rawPriceData}
         
-        // --- TAMBAHAN DATA PENTING ---
-        eventId={event.id}      // ID Event
-        rawPrice={rawPriceData} // Harga Angka (untuk API)
+        // --- KIRIM KOORDINAT ---
+        lat={event.lat}
+        lng={event.lng}
       />
     </main>
   );

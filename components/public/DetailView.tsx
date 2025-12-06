@@ -6,11 +6,10 @@ import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import Button from '@/components/ui/Button';
 import { saveTransaction } from '@/lib/services/transaction';
-// Import Service Wishlist
 import { toggleWishlist, checkIsLoved } from '@/lib/services/wishlist';
 
 interface DetailViewProps {
-  id?: string; // ID UNIK ITEM (Wajib untuk wishlist)
+  id?: string;
   title: string;
   image: string;
   category: string;
@@ -21,11 +20,14 @@ interface DetailViewProps {
   price?: string;     
   eventId?: string;   
   rawPrice?: number;
-  type?: 'event' | 'place'; // Pembeda tipe
+  type?: 'event' | 'place';
+  // --- TAMBAHAN KOORDINAT ---
+  lat?: number;
+  lng?: number;
 }
 
 const DetailView: React.FC<DetailViewProps> = ({
-  id, // ID Item (dari Firestore)
+  id,
   title,
   image,
   category,
@@ -36,17 +38,18 @@ const DetailView: React.FC<DetailViewProps> = ({
   price,
   eventId,
   rawPrice,
-  type = 'place' // Default tipe 'place' (wisata)
+  type = 'place',
+  lat,
+  lng
 }) => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [isLoved, setIsLoved] = useState(false); // State Love
+  const [isLoved, setIsLoved] = useState(false);
 
-  // Cek Status Love saat pertama load
   useEffect(() => {
     const checkLoveStatus = async () => {
       const user = auth.currentUser;
-      const targetId = id || eventId; // Gunakan id atau eventId
+      const targetId = id || eventId;
       if (user && targetId) {
         const status = await checkIsLoved(user.uid, targetId);
         setIsLoved(status);
@@ -55,7 +58,6 @@ const DetailView: React.FC<DetailViewProps> = ({
     checkLoveStatus();
   }, [id, eventId]);
 
-  // --- LOGIC LOVE / WISHLIST ---
   const handleLove = async () => {
     const user = auth.currentUser;
     if (!user) return router.push('/login');
@@ -63,27 +65,24 @@ const DetailView: React.FC<DetailViewProps> = ({
     const targetId = id || eventId;
     if (!targetId) return;
 
-    // Optimistic UI Update (Ubah warna dulu biar cepat)
     const previousState = isLoved;
     setIsLoved(!isLoved);
 
     try {
-      const result = await toggleWishlist(user.uid, {
+      await toggleWishlist(user.uid, {
         id: targetId,
-        type: eventId ? 'event' : 'place', // Deteksi otomatis
+        type: eventId ? 'event' : 'place',
         title,
         image,
         category,
-        location
+        location: location || ""
       });
-      // alert(result.message); // Optional: Alert kalau mau
     } catch (error) {
-      setIsLoved(previousState); // Rollback kalau error
+      setIsLoved(previousState);
       alert("Gagal menambahkan ke wishlist");
     }
   };
 
-  // --- LOGIC PEMBAYARAN MIDTRANS ---
   const handleBuyTicket = async () => {
     const user = auth.currentUser;
     if (!user) {
@@ -158,6 +157,19 @@ const DetailView: React.FC<DetailViewProps> = ({
     }
   };
 
+  // --- LOGIC BUKA MAPS ---
+  const handleOpenMaps = () => {
+    if (lat && lng) {
+      // Buka Google Maps dengan Koordinat Presisi
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+    } else if (location) {
+      // Fallback: Cari berdasarkan Nama Lokasi (Jika lat/lng kosong)
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+    } else {
+      alert("Lokasi belum diatur oleh penyelenggara.");
+    }
+  };
+
   return (
     <article className="bg-white min-h-screen pb-20">
       {/* HERO IMAGE */}
@@ -165,23 +177,20 @@ const DetailView: React.FC<DetailViewProps> = ({
         <img src={image} alt={title} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
         
-        {/* Navigasi Back */}
         <div className="absolute top-24 left-4 md:left-8 z-10">
            <Link href="/" className="flex items-center gap-2 text-white/80 hover:text-white transition bg-black/20 backdrop-blur-sm px-4 py-2 rounded-full">
              &larr; Kembali
            </Link>
         </div>
 
-        {/* --- TOMBOL LOVE (BARU) --- */}
         <button 
           onClick={handleLove}
           className="absolute top-24 right-4 md:right-8 z-10 w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-lg border border-white/30"
         >
-          {/* Ikon Jantung SVG */}
           <svg 
             xmlns="http://www.w3.org/2000/svg" 
             viewBox="0 0 24 24" 
-            fill={isLoved ? "#ef4444" : "none"} // Merah jika Loved, Transparan jika tidak
+            fill={isLoved ? "#ef4444" : "none"}
             stroke={isLoved ? "#ef4444" : "white"} 
             strokeWidth="2" 
             className="w-7 h-7 transition-colors duration-300"
@@ -190,7 +199,6 @@ const DetailView: React.FC<DetailViewProps> = ({
           </svg>
         </button>
 
-        {/* Judul */}
         <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
           <div className="container mx-auto">
             <span className="px-3 py-1 bg-blue-600 text-white text-xs md:text-sm font-bold rounded-md mb-3 inline-block shadow-lg">
@@ -229,6 +237,17 @@ const DetailView: React.FC<DetailViewProps> = ({
               <li className="flex justify-between border-b border-gray-200 pb-2">
                  <span className="text-gray-500">Harga</span>
                  <span className="font-bold text-green-600 text-right text-lg">{price}</span>
+              </li>
+              {/* TOMBOL PETA DISINI */}
+              <li className="pt-2">
+                <Button 
+                  onClick={handleOpenMaps} 
+                  variant="outline" 
+                  className="w-full justify-center text-blue-600 border-blue-200 hover:bg-blue-50 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Lihat di Google Maps
+                </Button>
               </li>
             </ul>
 
