@@ -135,3 +135,65 @@ export const getEOStats = async (eoId: string) => {
     return { totalEvents: 0, ticketsSold: 0, totalRevenue: 0, pendingEvents: 0 };
   }
 };
+
+// --- SERVICE: LAPORAN PENJUALAN ---
+export const getEOSalesReport = async (eoId: string) => {
+  try {
+    // 1. Ambil semua Event ID milik EO ini
+    const qEvents = query(collection(db, "events"), where("organizerId", "==", eoId));
+    const eventsSnap = await getDocs(qEvents);
+    
+    // Kita buat Map: { 'event_id_1': 'Nama Event 1', ... } biar gampang lookup
+    const myEventIds: string[] = [];
+    const eventNames: { [key: string]: string } = {};
+
+    eventsSnap.forEach((doc) => {
+      myEventIds.push(doc.id);
+      eventNames[doc.id] = doc.data().title;
+    });
+
+    if (myEventIds.length === 0) return []; // Belum punya event, berarti belum ada sales
+
+    // 2. Ambil Transaksi berdasarkan Event ID
+    // (Note: Firestore 'in' query max 10 item. Untuk skala besar, logic ini harus diubah)
+    // Untuk sekarang kita ambil semua transaksi lalu filter di client (User base masih kecil)
+    // Atau loop per event jika event sedikit. 
+    // Kita pakai cara aman: Fetch all transactions yg punya eventId (agak berat tapi akurat untuk MVP)
+    
+    // Cara Alternatif Lebih Efisien untuk MVP:
+    // Query Transactions where eventId IN [list_id] (Kita batch per 10)
+    
+    const transactionsRef = collection(db, "transactions");
+    // Kita ambil semua transaksi yang eventId-nya ada di list myEventIds
+    // Karena keterbatasan Firestore, kita filter manual di client side setelah fetch yang relevan
+    // atau fetch per event.
+    
+    // STRATEGI FETCH PER EVENT (Lebih aman untuk struktur data saat ini)
+    const allSales: any[] = [];
+    
+    for (const eventId of myEventIds) {
+      const qTrans = query(
+        transactionsRef, 
+        where("eventId", "==", eventId),
+        where("status", "==", "settlement") // Hanya ambil yang SUKSES bayar (LUNAS)
+      );
+      const transSnap = await getDocs(qTrans);
+      
+      transSnap.forEach((doc) => {
+        const data = doc.data();
+        allSales.push({
+          id: doc.id,
+          ...data,
+          eventName: eventNames[data.eventId] // Pastikan nama event terisi
+        });
+      });
+    }
+
+    // Urutkan dari yang terbaru
+    return allSales.sort((a, b) => b.createdAt - a.createdAt);
+
+  } catch (error) {
+    console.error("Error fetching sales report:", error);
+    return [];
+  }
+};

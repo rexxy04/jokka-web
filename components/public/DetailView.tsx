@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import Button from '@/components/ui/Button';
-// Import Service Baru
 import { saveTransaction } from '@/lib/services/transaction';
+// Import Service Wishlist
+import { toggleWishlist, checkIsLoved } from '@/lib/services/wishlist';
 
 interface DetailViewProps {
+  id?: string; // ID UNIK ITEM (Wajib untuk wishlist)
   title: string;
   image: string;
   category: string;
@@ -18,10 +20,12 @@ interface DetailViewProps {
   date?: string;
   price?: string;     
   eventId?: string;   
-  rawPrice?: number;  
+  rawPrice?: number;
+  type?: 'event' | 'place'; // Pembeda tipe
 }
 
 const DetailView: React.FC<DetailViewProps> = ({
+  id, // ID Item (dari Firestore)
   title,
   image,
   category,
@@ -31,11 +35,55 @@ const DetailView: React.FC<DetailViewProps> = ({
   date,
   price,
   eventId,
-  rawPrice
+  rawPrice,
+  type = 'place' // Default tipe 'place' (wisata)
 }) => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isLoved, setIsLoved] = useState(false); // State Love
 
+  // Cek Status Love saat pertama load
+  useEffect(() => {
+    const checkLoveStatus = async () => {
+      const user = auth.currentUser;
+      const targetId = id || eventId; // Gunakan id atau eventId
+      if (user && targetId) {
+        const status = await checkIsLoved(user.uid, targetId);
+        setIsLoved(status);
+      }
+    };
+    checkLoveStatus();
+  }, [id, eventId]);
+
+  // --- LOGIC LOVE / WISHLIST ---
+  const handleLove = async () => {
+    const user = auth.currentUser;
+    if (!user) return router.push('/login');
+
+    const targetId = id || eventId;
+    if (!targetId) return;
+
+    // Optimistic UI Update (Ubah warna dulu biar cepat)
+    const previousState = isLoved;
+    setIsLoved(!isLoved);
+
+    try {
+      const result = await toggleWishlist(user.uid, {
+        id: targetId,
+        type: eventId ? 'event' : 'place', // Deteksi otomatis
+        title,
+        image,
+        category,
+        location
+      });
+      // alert(result.message); // Optional: Alert kalau mau
+    } catch (error) {
+      setIsLoved(previousState); // Rollback kalau error
+      alert("Gagal menambahkan ke wishlist");
+    }
+  };
+
+  // --- LOGIC PEMBAYARAN MIDTRANS ---
   const handleBuyTicket = async () => {
     const user = auth.currentUser;
     if (!user) {
@@ -54,7 +102,6 @@ const DetailView: React.FC<DetailViewProps> = ({
     try {
       const orderId = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      // 1. Minta Token
       const response = await fetch('/api/tokenizer', {
         method: 'POST',
         body: JSON.stringify({
@@ -71,33 +118,22 @@ const DetailView: React.FC<DetailViewProps> = ({
       const data = await response.json();
       if (!data.token) throw new Error("Gagal mendapatkan token pembayaran.");
 
-      // 2. Tampilkan Popup
       window.snap.pay(data.token, {
-        // --- SUKSES ---
         onSuccess: async function(result: any) {
-          console.log("Payment Success:", result);
-          
-          // Simpan ke Database
           await saveTransaction({
             orderId: result.order_id,
             eventId: eventId,
-            eventName: title, // Simpan judul event biar gak perlu fetch ulang
+            eventName: title,
             userId: user.uid,
             amount: Number(result.gross_amount),
-            status: result.transaction_status, // biasanya 'settlement' atau 'capture'
+            status: result.transaction_status,
             paymentType: result.payment_type,
             transactionTime: result.transaction_time
           });
-
-          alert("Pembayaran Berhasil! Tiket sudah masuk ke Profil Anda.");
-          router.push('/profile'); // Redirect ke profil untuk lihat tiket
+          alert("Pembayaran Berhasil! Tiket masuk ke Profil.");
+          router.push('/profile');
         },
-        
-        // --- PENDING ---
         onPending: async function(result: any) {
-          console.log("Payment Pending:", result);
-          
-          // Tetap simpan walau pending (User bisa bayar nanti)
           await saveTransaction({
             orderId: result.order_id,
             eventId: eventId,
@@ -108,23 +144,14 @@ const DetailView: React.FC<DetailViewProps> = ({
             paymentType: result.payment_type,
             transactionTime: result.transaction_time
           });
-
-          alert("Menunggu Pembayaran. Cek instruksi di Profil Anda.");
+          alert("Menunggu Pembayaran. Cek Profil Anda.");
           router.push('/profile');
         },
-        
-        // --- ERROR ---
-        onError: function(result: any) {
-          alert("Pembayaran Gagal!");
-          console.log(result);
-        },
-        onClose: function() {
-          alert('Anda menutup popup tanpa menyelesaikan pembayaran');
-        }
+        onError: function(result: any) { alert("Pembayaran Gagal!"); },
+        onClose: function() { alert('Anda menutup popup tanpa menyelesaikan pembayaran'); }
       });
 
     } catch (error: any) {
-      console.error(error);
       alert("Terjadi kesalahan: " + error.message);
     } finally {
       setLoading(false);
@@ -133,15 +160,37 @@ const DetailView: React.FC<DetailViewProps> = ({
 
   return (
     <article className="bg-white min-h-screen pb-20">
-      {/* Hero Image */}
-      <div className="relative h-[50vh] md:h-[60vh] w-full">
+      {/* HERO IMAGE */}
+      <div className="relative h-[50vh] md:h-[60vh] w-full group">
         <img src={image} alt={title} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+        
+        {/* Navigasi Back */}
         <div className="absolute top-24 left-4 md:left-8 z-10">
-           <Link href="/event" className="flex items-center gap-2 text-white/80 hover:text-white transition bg-black/20 backdrop-blur-sm px-4 py-2 rounded-full">
+           <Link href="/" className="flex items-center gap-2 text-white/80 hover:text-white transition bg-black/20 backdrop-blur-sm px-4 py-2 rounded-full">
              &larr; Kembali
            </Link>
         </div>
+
+        {/* --- TOMBOL LOVE (BARU) --- */}
+        <button 
+          onClick={handleLove}
+          className="absolute top-24 right-4 md:right-8 z-10 w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-lg border border-white/30"
+        >
+          {/* Ikon Jantung SVG */}
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 24 24" 
+            fill={isLoved ? "#ef4444" : "none"} // Merah jika Loved, Transparan jika tidak
+            stroke={isLoved ? "#ef4444" : "white"} 
+            strokeWidth="2" 
+            className="w-7 h-7 transition-colors duration-300"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+          </svg>
+        </button>
+
+        {/* Judul */}
         <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
           <div className="container mx-auto">
             <span className="px-3 py-1 bg-blue-600 text-white text-xs md:text-sm font-bold rounded-md mb-3 inline-block shadow-lg">
@@ -161,7 +210,7 @@ const DetailView: React.FC<DetailViewProps> = ({
       {/* Content */}
       <div className="container mx-auto px-4 py-12 md:flex gap-12">
         <div className="md:w-2/3">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Tentang Acara</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Tentang</h2>
           <p className="text-gray-600 leading-relaxed text-lg whitespace-pre-line">
             {description || "Belum ada deskripsi lengkap."}
           </p>
@@ -169,7 +218,7 @@ const DetailView: React.FC<DetailViewProps> = ({
 
         <div className="md:w-1/3 mt-8 md:mt-0">
           <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 sticky top-24">
-            <h3 className="font-bold text-gray-900 mb-4 text-lg">Informasi Tiket</h3>
+            <h3 className="font-bold text-gray-900 mb-4 text-lg">Informasi</h3>
             <ul className="space-y-4 mb-6">
               {date && (
                  <li className="flex justify-between border-b border-gray-200 pb-2">
@@ -178,30 +227,20 @@ const DetailView: React.FC<DetailViewProps> = ({
                  </li>
               )}
               <li className="flex justify-between border-b border-gray-200 pb-2">
-                 <span className="text-gray-500">Harga Mulai</span>
+                 <span className="text-gray-500">Harga</span>
                  <span className="font-bold text-green-600 text-right text-lg">{price}</span>
               </li>
             </ul>
 
-            {/* Tombol Bayar */}
             {rawPrice && rawPrice > 0 ? (
-              <Button 
-                onClick={handleBuyTicket} 
-                variant="primary" 
-                className="w-full justify-center py-3 text-lg shadow-blue-500/20"
-                disabled={loading}
-              >
-                {loading ? "Memproses..." : "Beli Tiket Sekarang"}
+              <Button onClick={handleBuyTicket} variant="primary" className="w-full justify-center py-3 text-lg" disabled={loading}>
+                {loading ? "Memproses..." : "Beli Tiket"}
               </Button>
             ) : (
               <Button href="#" variant="outline" className="w-full justify-center py-3" disabled>
-                Event Gratis / Tiket Habis
+                {rawPrice === 0 ? "Gratis / Free Entry" : "Tiket Habis"}
               </Button>
             )}
-            
-            <p className="text-xs text-center text-gray-400 mt-3">
-              Transaksi aman didukung oleh Midtrans
-            </p>
           </div>
         </div>
       </div>

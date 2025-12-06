@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, serverTimestamp} from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, getDoc} from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 
@@ -241,5 +241,138 @@ export const rejectEvent = async (eventId: string) => {
     return true;
   } catch (error) {
     throw new Error("Gagal menolak event");
+  }
+};
+
+// --- SERVICE: EDIT WISATA ---
+
+// 1. Ambil Data Satu Wisata (Untuk pre-fill form edit)
+export const getPlaceById = async (id: string) => {
+  try {
+    const docRef = doc(db, "places", id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as any;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error get place:", error);
+    return null;
+  }
+};
+
+// 2. Update Wisata
+export const updatePlace = async (id: string, formData: PlaceFormData, newImageFile: File | null) => {
+  try {
+    let imageUrl = null;
+
+    // Cek: Apakah admin upload foto baru?
+    if (newImageFile) {
+      const storageRef = ref(storage, `places/${Date.now()}-${newImageFile.name}`);
+      const snapshot = await uploadBytes(storageRef, newImageFile);
+      imageUrl = await getDownloadURL(snapshot.ref);
+    }
+
+    // Siapkan data update
+    const updateData: any = {
+      name: formData.name,
+      category: formData.category,
+      rating: formData.rating,
+      description: formData.description,
+      location: formData.location,
+      price: formData.price,
+      updatedAt: serverTimestamp()
+    };
+
+    // Hanya update field image jika ada upload baru
+    if (imageUrl) {
+      updateData.image = imageUrl;
+    }
+
+    const docRef = doc(db, "places", id);
+    await updateDoc(docRef, updateData);
+
+    return { success: true };
+
+  } catch (error: any) {
+    console.error("Error updating place:", error);
+    throw new Error(error.message || "Gagal mengupdate wisata.");
+  }
+};
+
+
+// --- PARTNER & SALES ANALYTICS ---
+
+// 1. Ambil Semua Partner EO (Verified Only)
+export const getVerifiedEOs = async () => {
+  try {
+    const q = query(
+      collection(db, "eos"), 
+      where("status", "==", "verified")
+    );
+    const querySnapshot = await getDocs(q);
+
+    
+    return querySnapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data() 
+    })) as unknown as EOData[];
+
+
+  } catch (error) {
+    console.error("Error fetching partners:", error);
+    return [];
+  }
+};
+
+// 2. Analisa Penjualan Global (Per EO)
+export const getSalesAnalysis = async () => {
+  try {
+    // A. Ambil Data Semua EO dulu (untuk Map Nama)
+    const eos = await getVerifiedEOs();
+    const eoMap: { [key: string]: string } = {}; // Map ID -> Nama PT
+    
+    // Inisialisasi Data Awal (Supaya EO yang belum ada penjualan tetap muncul di list dengan angka 0)
+    const stats: { [key: string]: { name: string, sold: number, revenue: number, eventCount: number } } = {};
+    
+    eos.forEach(eo => {
+      eoMap[eo.uid] = eo.companyName;
+      stats[eo.uid] = { 
+        name: eo.companyName, 
+        sold: 0, 
+        revenue: 0, 
+        eventCount: 0 
+      };
+    });
+
+    // B. Ambil Semua Event (Published/Finished)
+    const eventsRef = collection(db, "events");
+    const eventsSnap = await getDocs(eventsRef);
+
+    // C. Hitung (Aggregate)
+    eventsSnap.forEach((doc) => {
+      const data = doc.data();
+      const eoId = data.organizerId;
+
+      // Hanya hitung jika EO-nya masih terdaftar/verified
+      if (stats[eoId]) {
+        stats[eoId].eventCount += 1;
+        
+        if (data.tickets && data.tickets.length > 0) {
+          const sold = data.tickets[0].sold || 0;
+          const price = data.tickets[0].price || 0;
+          
+          stats[eoId].sold += sold;
+          stats[eoId].revenue += (sold * price);
+        }
+      }
+    });
+
+    // Ubah Object ke Array untuk ditampilkan di Tabel
+    return Object.values(stats).sort((a, b) => b.sold - a.sold); // Urutkan dari penjualan terbanyak
+
+  } catch (error) {
+    console.error("Error fetching sales analysis:", error);
+    return [];
   }
 };

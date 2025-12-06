@@ -83,3 +83,64 @@ export const getUserTransactions = async (userId: string) => {
     return [];
   }
 };
+
+// --- SERVICE: VALIDASI TIKET (CHECK-IN) ---
+export const verifyTicket = async (orderId: string, currentEoId: string) => {
+  try {
+    // 1. Cari Transaksi berdasarkan Order ID
+    const q = query(
+      collection(db, 'transactions'),
+      where('orderId', '==', orderId)
+    );
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      throw new Error("Tiket tidak ditemukan. Cek kembali Order ID.");
+    }
+
+    const ticketDoc = snapshot.docs[0];
+    const ticketData = ticketDoc.data();
+
+    // 2. Cek Status Pembayaran
+    if (ticketData.status !== 'settlement' && ticketData.status !== 'capture') {
+      throw new Error(`Tiket belum lunas (Status: ${ticketData.status})`);
+    }
+
+    // 3. Cek Kepemilikan Event (Security)
+    // Ambil data event terkait tiket ini untuk cek siapa EO-nya
+    const eventRef = doc(db, "events", ticketData.eventId);
+    const eventSnap = await getDoc(eventRef);
+    
+    if (!eventSnap.exists()) {
+      throw new Error("Data event tidak ditemukan (mungkin terhapus).");
+    }
+
+    const eventData = eventSnap.data();
+    if (eventData.organizerId !== currentEoId) {
+      throw new Error("Tiket ini bukan untuk event Anda!");
+    }
+
+    // 4. Cek Apakah Sudah Dipakai?
+    if (ticketData.redeemedAt) {
+      const dateUsed = new Date(ticketData.redeemedAt.seconds * 1000).toLocaleString('id-ID');
+      throw new Error(`Tiket SUDAH DIPAKAI pada ${dateUsed}`);
+    }
+
+    // 5. UPDATE: Tandai tiket sudah dipakai (Check-in)
+    await updateDoc(doc(db, "transactions", ticketDoc.id), {
+      redeemedAt: serverTimestamp()
+    });
+
+    return {
+      success: true,
+      ticket: {
+        eventName: ticketData.eventName,
+        buyerId: ticketData.userId,
+        amount: ticketData.amount
+      }
+    };
+
+  } catch (error: any) {
+    throw new Error(error.message || "Gagal memvalidasi tiket.");
+  }
+};

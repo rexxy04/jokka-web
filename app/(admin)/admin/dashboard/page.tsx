@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import StatCard from '@/components/ui/StatCard'; 
 import { getAdminStats } from '@/lib/services/admin'; // Import Service
 
@@ -51,12 +52,14 @@ export default function AdminDashboard() {
           textColor="text-green-600" 
           borderColor="border-l-green-500" 
         />
-        <StatCard 
-          label="Tiket Terjual (All Time)" 
-          value={stats.totalTicketsSold.toString()} 
-          textColor="text-purple-600" 
-          borderColor="border-l-purple-500" 
-        />
+        <Link href="/admin/ticket-sales" className="block transition transform hover:scale-105">
+          <StatCard 
+            label="Tiket Terjual (All Time) ↗" 
+            value={stats.totalTicketsSold.toString()} 
+            textColor="text-purple-600" 
+            borderColor="border-l-purple-500" 
+          />
+        </Link>
       </div>
 
       <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-sm h-64 flex items-center justify-center">

@@ -80,6 +80,7 @@ export default async function EventDetailPage({
   return (
     <main>
       <DetailView 
+        id={event.id}
         title={event.title}
         image={event.poster}
         category={event.category}

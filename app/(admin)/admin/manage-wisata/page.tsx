@@ -181,29 +181,47 @@ export default function ManageWisataPage() {
                         </div>
                       </div>
                     </td>
+
+
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold border border-blue-100">
                         {place.category}
                       </span>
                     </td>
+
+
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(place.createdAt)}
                     </td>
+
+
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        {/* Tombol Lihat/Edit (Link ke detail publik dulu sementara) */}
-                        <Link href={`/destinasi/${place.id}`} target="_blank" className="text-blue-600 hover:underline text-xs bg-blue-50 px-2 py-1 rounded">
+                        {/* Tombol Lihat Public */}
+                        <Link href={`/destinasi/${place.id}`} target="_blank" className="text-gray-500 hover:text-gray-700 hover:underline text-xs bg-gray-100 px-2 py-1 rounded">
                           Lihat
                         </Link>
+                        
+                        {/* --- TOMBOL EDIT BARU --- */}
+                        <Link 
+                          href={`/admin/manage-wisata/edit/${place.id}`} 
+                          className="text-blue-600 hover:text-blue-800 hover:underline text-xs bg-blue-50 px-2 py-1 rounded"
+                        >
+                          Edit
+                        </Link>
+                        {/* ------------------------- */}
+
                         {/* Tombol Hapus */}
                         <button 
                           onClick={() => handleDelete(place.id, place.name)}
-                          className="text-red-600 hover:underline text-xs bg-red-50 px-2 py-1 rounded"
+                          className="text-red-600 hover:text-red-800 hover:underline text-xs bg-red-50 px-2 py-1 rounded"
                         >
                           Hapus
                         </button>
                       </div>
                     </td>
+
+                    
                   </tr>
                 ))
               )}

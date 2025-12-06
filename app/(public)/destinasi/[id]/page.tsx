@@ -52,6 +52,7 @@ export default async function DestinasiDetailPage({
       
       {/* 2. Masukkan data dari variable 'place' ke props komponen */}
       <DetailView 
+        id={place.id}
         title={place.name}
         image={place.image}
         category={place.category}

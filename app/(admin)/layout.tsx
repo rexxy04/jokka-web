@@ -63,12 +63,22 @@ export default function AdminLayout({
           <Link href="/admin/dashboard" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             Dashboard
           </Link>
+
+
           <Link href="/admin/approvals" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             👮‍♂️ Approval EO
           </Link>
+
+          <Link href="/admin/partners" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
+            🤝 List Partner EO
+          </Link>
+
+          
           <Link href="/admin/event-approvals" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             🎫 Approval Event
           </Link>
+
+          
           <Link href="/admin/manage-wisata" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             🏖️ Kelola Wisata
           </Link>
