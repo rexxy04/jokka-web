@@ -70,6 +70,28 @@ export const registerEO = async (formData: EOFormData, files: EOFiles) => {
   }
 };
 
+// --- SERVICE: AMBIL EVENT MILIK EO ---
+export const getMyEvents = async (eoId: string) => {
+  try {
+    // Ambil event dimana organizerId == eoId
+    const q = query(collection(db, "events"), where("organizerId", "==", eoId));
+    const querySnapshot = await getDocs(q);
+
+    const events: any[] = [];
+    querySnapshot.forEach((doc) => {
+      events.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Sort manual di client (Biar gak perlu bikin index Firestore dulu)
+    // Urutkan dari yang paling baru dibuat
+    return events.sort((a, b) => b.createdAt - a.createdAt);
+
+  } catch (error) {
+    console.error("Error fetching my events:", error);
+    return [];
+  }
+};
+
 // --- SERVICE DASHBOARD STATS ---
 export const getEOStats = async (eoId: string) => {
   try {
