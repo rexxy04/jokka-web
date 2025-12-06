@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 import { auth } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/services/auth';
 
@@ -13,22 +13,28 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [authorized, setAuthorized] = useState(false); // Default terkunci
+  const [authorized, setAuthorized] = useState(false);
+
+  // --- FUNGSI LOGOUT BARU ---
+  const handleLogout = async () => {
+    if (confirm("Yakin ingin keluar dan mengakhiri sesi Admin?")) {
+        await signOut(auth);
+        router.push('/login'); // Redirect ke halaman login
+    }
+  };
+  // --------------------------
 
   useEffect(() => {
     // Listener Auth: Cek setiap kali status login berubah
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        // Kalau gak login, tendang ke login
         router.push('/login');
       } else {
-        // Kalau login, cek role-nya di database
         const profile = await getUserProfile(user.uid);
         
         if (profile?.role === 'admin') {
-          setAuthorized(true); // Buka kunci
+          setAuthorized(true);
         } else {
-          // Kalau bukan admin, tendang ke Home
           alert("Anda tidak memiliki akses ke halaman Admin!");
           router.push('/');
         }
@@ -38,7 +44,6 @@ export default function AdminLayout({
     return () => unsubscribe();
   }, [router]);
 
-  // Tampilkan Loading selagi mengecek (Biar konten admin gak bocor)
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -67,10 +72,15 @@ export default function AdminLayout({
           <Link href="/admin/manage-wisata" className="block px-4 py-2 rounded text-gray-300 hover:bg-gray-800 hover:text-white transition">
             🏖️ Kelola Wisata
           </Link>
+          
+          {/* TOMBOL LOGOUT AKTIF */}
           <div className="border-t border-gray-700 mt-4 pt-4">
-             <Link href="/" className="block px-4 py-2 rounded text-red-400 hover:bg-gray-800 hover:text-red-300 transition">
-              Keluar
-            </Link>
+             <button 
+                onClick={handleLogout} 
+                className="w-full text-left px-4 py-2 rounded text-red-400 hover:bg-gray-800 hover:text-red-300 transition"
+             >
+              🚪 Logout
+            </button>
           </div>
         </nav>
       </aside>
