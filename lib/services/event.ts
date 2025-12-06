@@ -45,6 +45,8 @@ export interface EventFormData {
   ticketName: string;   // Misal: "Regular", "VIP"
   ticketPrice: number;
   ticketStock: number;
+  lat?: number;
+  lng?: number;
 }
 
 export const createEvent = async (formData: EventFormData, posterFile: File, organizerId: string) => {
@@ -63,7 +65,13 @@ export const createEvent = async (formData: EventFormData, posterFile: File, org
       title: formData.title,
       description: formData.description,
       category: formData.category,
+
+
       locationName: formData.locationName,
+      lat: formData.lat || 0, // Simpan koordinat
+      lng: formData.lng || 0,
+
+      
       startDate: formData.startDate,
       endDate: formData.endDate,
       poster: posterUrl,
