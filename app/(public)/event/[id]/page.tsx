@@ -72,6 +72,11 @@ export default async function EventDetailPage({
     ? formatPrice(event.tickets[0].price) 
     : "Info Harga Menyusul";
 
+  // Ambil harga angka murni (misal: 50000)
+  const rawPriceData = event.tickets && event.tickets.length > 0 
+    ? event.tickets[0].price 
+    : 0;
+
   return (
     <main>
       <DetailView 
@@ -79,14 +84,13 @@ export default async function EventDetailPage({
         image={event.poster}
         category={event.category}
         description={event.description}
-        
-        // Data Khusus Event
         location={event.locationName}
         date={formatDate(event.startDate)}
-        price={ticketInfo}
+        price={ticketInfo} // Ini string "Rp 50.000" (untuk tampilan)
         
-        // SAYA SUDAH HAPUS PROPS 'openTime' DAN 'closeTime' DISINI
-        // Agar tidak error lagi
+        // --- TAMBAHAN DATA PENTING ---
+        eventId={event.id}      // ID Event
+        rawPrice={rawPriceData} // Harga Angka (untuk API)
       />
     </main>
   );
