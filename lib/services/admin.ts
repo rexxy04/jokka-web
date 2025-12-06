@@ -14,6 +14,52 @@ export interface EOData {
   createdAt: any;
 }
 
+// --- DASHBOARD STATS SERVICE ---
+export const getAdminStats = async () => {
+  try {
+    // 1. Hitung Statistik EO (Sekali fetch collection 'eos' biar hemat)
+    const eosRef = collection(db, "eos");
+    const eosSnap = await getDocs(eosRef);
+    
+    let pendingEO = 0;
+    let activeEO = 0;
+
+    eosSnap.forEach((doc) => {
+      const data = doc.data();
+      if (data.status === 'pending_verification') pendingEO++;
+      if (data.status === 'verified') activeEO++;
+    });
+
+    // 2. Hitung Total Wisata
+    const placesRef = collection(db, "places");
+    const placesSnap = await getDocs(placesRef);
+    const totalPlaces = placesSnap.size;
+
+    // 3. Hitung Total Tiket Terjual (Global dari semua event)
+    const eventsRef = collection(db, "events");
+    const eventsSnap = await getDocs(eventsRef);
+    
+    let totalTicketsSold = 0;
+    eventsSnap.forEach((doc) => {
+      const data = doc.data();
+      if (data.tickets && data.tickets.length > 0) {
+        totalTicketsSold += (data.tickets[0].sold || 0);
+      }
+    });
+
+    return {
+      pendingEO,
+      activeEO,
+      totalPlaces,
+      totalTicketsSold
+    };
+
+  } catch (error) {
+    console.error("Error fetching admin stats:", error);
+    return { pendingEO: 0, activeEO: 0, totalPlaces: 0, totalTicketsSold: 0 };
+  }
+};
+
 // 1. Fetch EO yang statusnya PENDING
 export const getPendingEOs = async () => {
   try {

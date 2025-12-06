@@ -1,37 +1,59 @@
-import React from 'react';
-import StatCard from '@/components/ui/StatCard'; // Kita reuse komponen yang sama dengan EO
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import StatCard from '@/components/ui/StatCard'; 
+import { getAdminStats } from '@/lib/services/admin'; // Import Service
 
 export default function AdminDashboard() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    pendingEO: 0,
+    activeEO: 0,
+    totalPlaces: 0,
+    totalTicketsSold: 0
+  });
+
+  useEffect(() => {
+    async function fetchData() {
+      const data = await getAdminStats();
+      setStats(data);
+      setLoading(false);
+    }
+    fetchData();
+  }, []);
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard Admin</h1>
-        <p className="text-gray-500 mt-1">Pantau aktivitas platform Jokka secara keseluruhan.</p>
+        <p className="text-gray-500 mt-1">
+          {loading ? "Sedang menghitung data..." : "Pantau aktivitas platform Jokka secara keseluruhan."}
+        </p>
       </div>
 
-      {/* Statistik Dummy (Nanti bisa difetch dari Firebase juga) */}
+      {/* Grid Statistik Real-time */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           label="EO Menunggu Verifikasi" 
-          value="2" 
+          value={stats.pendingEO.toString()} 
           textColor="text-orange-600" 
           borderColor="border-l-orange-500" 
         />
         <StatCard 
           label="Total Partner EO" 
-          value="15" 
+          value={stats.activeEO.toString()} 
           textColor="text-blue-600" 
           borderColor="border-l-blue-500" 
         />
         <StatCard 
           label="Total Wisata Terdaftar" 
-          value="42" 
+          value={stats.totalPlaces.toString()} 
           textColor="text-green-600" 
           borderColor="border-l-green-500" 
         />
         <StatCard 
           label="Tiket Terjual (All Time)" 
-          value="1.2k" 
+          value={stats.totalTicketsSold.toString()} 
           textColor="text-purple-600" 
           borderColor="border-l-purple-500" 
         />
