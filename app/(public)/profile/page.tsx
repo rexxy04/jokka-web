@@ -1,42 +1,68 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+
+// Components
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/input';
 import Card from '@/components/ui/card';
+import Modal from '@/components/ui/Modal';
+
+// Services
 import { getUserTransactions, Transaction } from '@/lib/services/transaction';
-// Import Wishlist Service
 import { getUserWishlist, WishlistItem } from '@/lib/services/wishlist';
+import { 
+  updateUserData, 
+  changeUserPassword, 
+  sendResetPasswordLink,
+  updateUserProfileImage // <--- Import Service Baru
+} from '@/lib/services/auth';
 
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [userDataFirestore, setUserDataFirestore] = useState<any>(null);
   
+  // Data Akun & Edit
+  const [userDataFirestore, setUserDataFirestore] = useState<any>(null);
+  const [phoneInput, setPhoneInput] = useState(''); 
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [loadingSaveProfile, setLoadingSaveProfile] = useState(false);
+
+  // Upload Foto
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Data Password
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passForm, setPassForm] = useState({ current: '', new: '', confirm: '' });
+  const [loadingPass, setLoadingPass] = useState(false);
+
+  // Data Tiket & Wishlist
   const [tickets, setTickets] = useState<Transaction[]>([]);
-  const [wishlist, setWishlist] = useState<WishlistItem[]>([]); // State Wishlist
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         
-        // 1. Data User
         const docRef = doc(db, "users", currentUser.uid);
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setUserDataFirestore(docSnap.data());
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setUserDataFirestore(data);
+          setPhoneInput(data.phone || ''); 
+        }
 
-        // 2. Data Tiket
         const myTickets = await getUserTransactions(currentUser.uid);
         setTickets(myTickets);
 
-        // 3. Data Wishlist (BARU)
         const myWishlist = await getUserWishlist(currentUser.uid);
         setWishlist(myWishlist);
         
@@ -61,6 +87,83 @@ export default function ProfilePage() {
     return 'bg-red-100 text-red-700 border-red-200';
   };
 
+  // --- LOGIC GANTI FOTO ---
+  const handlePhotoClick = () => {
+    // Trigger klik pada input file yang tersembunyi
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Validasi ukuran (Max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Ukuran foto terlalu besar! Maksimal 2MB.");
+        return;
+      }
+
+      setUploadingPhoto(true);
+      try {
+        // Panggil Service Upload
+        const res = await updateUserProfileImage(user, file);
+        alert("Foto profil berhasil diperbarui! 📸");
+        
+        // Update state lokal biar langsung berubah
+        setUser({ ...user, photoURL: res.photoURL });
+        
+      } catch (error: any) {
+        alert(error.message);
+      } finally {
+        setUploadingPhoto(false);
+      }
+    }
+  };
+
+  // --- LOGIC SIMPAN PROFIL ---
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setLoadingSaveProfile(true);
+    try {
+      await updateUserData(user.uid, { phone: phoneInput });
+      alert("Nomor HP berhasil diperbarui! ✅");
+      setIsEditingProfile(false);
+      setUserDataFirestore({ ...userDataFirestore, phone: phoneInput });
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoadingSaveProfile(false);
+    }
+  };
+
+  // --- LOGIC GANTI PASSWORD ---
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passForm.new !== passForm.confirm) return alert("Konfirmasi password baru tidak cocok!");
+    
+    setLoadingPass(true);
+    try {
+      await changeUserPassword(user, passForm.current, passForm.new);
+      alert("Password berhasil diubah! Silakan login ulang.");
+      await signOut(auth);
+      router.push('/login');
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoadingPass(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!user?.email) return;
+    try {
+      await sendResetPasswordLink(user.email);
+      alert(`Link reset password telah dikirim ke ${user.email}.`);
+    } catch (error: any) {
+      alert("Gagal mengirim email reset.");
+    }
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Memuat profil...</div>;
 
   return (
@@ -73,14 +176,47 @@ export default function ProfilePage() {
           {/* KOLOM KIRI */}
           <div className="md:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <div className="w-32 h-32 mx-auto bg-gray-200 rounded-full flex items-center justify-center text-4xl mb-4 text-gray-400 font-bold">
-                {user?.displayName?.charAt(0).toUpperCase() || "U"}
+              
+              {/* --- BAGIAN FOTO PROFIL --- */}
+              <div 
+                onClick={handlePhotoClick}
+                className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-4 overflow-hidden relative group cursor-pointer border-4 ${uploadingPhoto ? 'border-blue-400 animate-pulse' : 'border-gray-100'}`}
+              >
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="Profil" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 flex items-center justify-center text-4xl font-bold text-gray-400">
+                    {user?.displayName?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                )}
+                
+                {/* Overlay Hover */}
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white text-xs font-medium">
+                  {uploadingPhoto ? "Uploading..." : "Ganti Foto"}
+                </div>
               </div>
+
+              {/* Input File Tersembunyi */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                className="hidden" 
+              />
+              {/* --------------------------- */}
+
               <h2 className="text-xl font-bold text-gray-900">{user?.displayName}</h2>
               <p className="text-sm text-gray-500">{user?.email}</p>
             </div>
+            
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
-              <Button onClick={handleLogout} variant="outline" className="w-full justify-center text-sm text-red-600 border-red-200 hover:bg-red-50">🚪 Keluar</Button>
+              <Button onClick={() => setIsPasswordModalOpen(true)} variant="outline" className="w-full justify-center text-sm">
+                🔒 Ganti Password
+              </Button>
+              <Button onClick={handleLogout} variant="outline" className="w-full justify-center text-sm text-red-600 border-red-200 hover:bg-red-50">
+                🚪 Keluar
+              </Button>
             </div>
           </div>
 
@@ -89,12 +225,45 @@ export default function ProfilePage() {
             
             {/* DATA AKUN */}
             <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Data Akun</h3>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-gray-900">Data Akun</h3>
+                {!isEditingProfile ? (
+                  <button onClick={() => setIsEditingProfile(true)} className="text-blue-600 text-sm font-semibold hover:underline">
+                    Edit Data
+                  </button>
+                ) : (
+                  <div className="flex gap-3">
+                    <button onClick={() => setIsEditingProfile(false)} className="text-gray-500 text-sm hover:underline">Batal</button>
+                    <button onClick={handleSaveProfile} disabled={loadingSaveProfile} className="text-blue-600 text-sm font-bold hover:underline">
+                      {loadingSaveProfile ? "Menyimpan..." : "Simpan"}
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input value={user?.displayName || ''} disabled className="bg-gray-50" />
-                <Input value={userDataFirestore?.username || '-'} disabled className="bg-gray-50" />
-                <Input value={user?.email || ''} disabled className="bg-gray-50" />
-                <Input value={userDataFirestore?.phone || 'Belum diatur'} disabled className="bg-gray-50" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nama Lengkap</label>
+                  <Input value={user?.displayName || ''} disabled className="bg-gray-50 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Username</label>
+                  <Input value={userDataFirestore?.username || '-'} disabled className="bg-gray-50 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                  <Input value={user?.email || ''} disabled className="bg-gray-50 cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nomor Telepon</label>
+                  <Input 
+                    value={phoneInput} 
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    disabled={!isEditingProfile} 
+                    className={isEditingProfile ? "bg-white border-blue-300 ring-2 ring-blue-100" : "bg-gray-50"} 
+                    placeholder="08..."
+                  />
+                </div>
               </div>
             </section>
 
@@ -127,7 +296,7 @@ export default function ProfilePage() {
               )}
             </section>
 
-            {/* WISHLIST (UPDATE REAL) */}
+            {/* WISHLIST */}
             <section>
               <div className="flex justify-between items-center mb-4 px-1">
                 <h3 className="text-lg font-bold text-gray-900">Disimpan / Wishlist ❤️</h3>
@@ -146,7 +315,6 @@ export default function ProfilePage() {
                       title={item.title} 
                       category={item.category}
                       image={item.image} 
-                      // Link dinamis tergantung tipe (destinasi atau event)
                       href={item.itemType === 'event' ? `/event/${item.itemId}` : `/destinasi/${item.itemId}`} 
                     />
                   ))}
@@ -157,6 +325,57 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL GANTI PASSWORD */}
+      <Modal 
+        isOpen={isPasswordModalOpen} 
+        onClose={() => setIsPasswordModalOpen(false)} 
+        title="Ganti Password"
+      >
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <Input 
+            type="password" 
+            placeholder="Password Saat Ini" 
+            label="Password Lama"
+            value={passForm.current}
+            onChange={(e) => setPassForm({...passForm, current: e.target.value})}
+            required
+          />
+          <Input 
+            type="password" 
+            placeholder="Password Baru" 
+            label="Password Baru"
+            value={passForm.new}
+            onChange={(e) => setPassForm({...passForm, new: e.target.value})}
+            required
+          />
+          <Input 
+            type="password" 
+            placeholder="Ulangi Password Baru" 
+            label="Konfirmasi Password Baru"
+            value={passForm.confirm}
+            onChange={(e) => setPassForm({...passForm, confirm: e.target.value})}
+            required
+          />
+          
+          <div className="pt-2">
+            <Button type="submit" variant="primary" className="w-full justify-center" disabled={loadingPass}>
+              {loadingPass ? "Memproses..." : "Ganti Password"}
+            </Button>
+          </div>
+
+          <div className="text-center pt-2">
+            <button 
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Lupa password saat ini? Kirim link reset
+            </button>
+          </div>
+        </form>
+      </Modal>
+
     </main>
   );
 }
