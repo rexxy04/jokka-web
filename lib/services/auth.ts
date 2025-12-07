@@ -187,9 +187,13 @@ export const changeUserPassword = async (user: User, currentPass: string, newPas
 export const sendResetPasswordLink = async (email: string) => {
   try {
     await sendPasswordResetEmail(auth, email);
-    return { success: true };
+    return true;
   } catch (error: any) {
-    throw new Error("Gagal mengirim link reset password.");
+    console.error("Reset Password Error:", error);
+    let msg = "Gagal mengirim email reset.";
+    if (error.code === 'auth/user-not-found') msg = "Email tidak terdaftar.";
+    else if (error.code === 'auth/invalid-email') msg = "Format email tidak valid.";
+    throw new Error(msg);
   }
 };
 

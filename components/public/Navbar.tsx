@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image'; // Import Image
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore'; // Import Firestore
-import { auth, db } from '@/lib/firebase'; // Import db
+import { doc, getDoc } from 'firebase/firestore'; 
+import { auth, db } from '@/lib/firebase'; 
 import Button from '@/components/ui/Button'; 
 
 const Navbar = () => {
@@ -17,28 +18,24 @@ const Navbar = () => {
   // State Khusus untuk Foto Profil (dari Database)
   const [dbPhoto, setDbPhoto] = useState<string | null>(null);
 
-  // Listener status login & Fetch Data Profil
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
       if (currentUser) {
-        // Jika login, cek database untuk foto terbaru
         try {
           const docRef = doc(db, "users", currentUser.uid);
           const docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            // Prioritas: Foto di DB > Foto Google > Null
             setDbPhoto(userData.photoURL || currentUser.photoURL);
           } else {
-            // Jika data DB belum ada, pakai foto bawaan Google
             setDbPhoto(currentUser.photoURL);
           }
         } catch (error) {
           console.error("Gagal ambil foto navbar:", error);
-          setDbPhoto(currentUser.photoURL); // Fallback
+          setDbPhoto(currentUser.photoURL); 
         }
       } else {
         setDbPhoto(null);
@@ -60,14 +57,22 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100 transition-all duration-300">
+    <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-white/90 backdrop-blur-md shadow-sm border-b border-gray-100 transition-all duration-300">
       <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center py-4">
+        <div className="flex justify-between items-center py-3">
           
-          {/* LOGO */}
-          <div className="text-2xl font-bold text-blue-600 z-50 relative">
+          {/* LOGO (Gunakan Image) */}
+          <div className="z-50 relative flex items-center">
             <Link href="/" onClick={() => setIsOpen(false)}>
-              Jokka<span className="text-gray-800">.</span>
+              <div className="relative w-32 h-10">
+                <Image 
+                  src="/images/logo-jokka.png" // Pastikan path benar
+                  alt="Jokka Logo"
+                  fill
+                  className="object-contain object-left"
+                  priority
+                />
+              </div>
             </Link>
           </div>
 
@@ -95,10 +100,9 @@ const Navbar = () => {
               // JIKA LOGIN
               <Link href="/profile" className="flex items-center gap-3 group">
                 <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition">
-                  Halo, {user.displayName || "User"}
+                  Halo, {user.displayName?.split(' ')[0] || "User"}
                 </span>
                 
-                {/* LOGIC FOTO PROFIL */}
                 <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-600 font-bold text-lg shadow-sm group-hover:shadow-md transition overflow-hidden">
                   {dbPhoto ? (
                     <img 
@@ -143,7 +147,7 @@ const Navbar = () => {
 
       {/* MOBILE MENU DROPDOWN */}
       {isOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-white border-b border-gray-100 shadow-xl flex flex-col p-4 space-y-4 animate-fadeIn">
+        <div className="md:hidden absolute top-full left-0 w-full bg-white border-b border-gray-100 shadow-xl flex flex-col p-4 space-y-4 animate-fadeIn h-screen">
           <Link href="/" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Home</Link>
           <Link href="/destinasi" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Destinasi</Link>
           <Link href="/event" className="text-gray-700 hover:text-blue-600 font-medium py-2 border-b border-gray-50" onClick={() => setIsOpen(false)}>Event</Link>
