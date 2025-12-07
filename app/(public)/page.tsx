@@ -3,51 +3,45 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-// 1. Import Service & Types
+// 1. Import Service
 import { getPublicEvents, EventData } from '@/lib/services/event';
 import { getFeaturedDestinations, DestinationData } from '@/lib/services/destination';
 
 // 2. Import Components
+import HeroSection from '@/components/public/HeroSection'; // <--- Import Hero Baru
 import EventPortraitCard from '@/components/event/EventPortraitCard';
 import DestinationCard from '@/components/destination/DestinationCard';
 
-// Kategori Cepat (Static Menu)
+// Kategori Cepat
 const categories = [
-  { name: 'Musik', icon: '🎵' },
-  { name: 'Alam', icon: '🏔️' },
-  { name: 'Kuliner', icon: '🍜' },
-  { name: 'Sejarah', icon: '🏛️' },
-  { name: 'Olahraga', icon: '⚽' },
-  { name: 'Workshop', icon: '🎨' },
+  { name: 'Musik', icon: '🎵', path: '/event' },
+  { name: 'Alam', icon: '🏔️', path: '/destinasi' },
+  { name: 'Kuliner', icon: '🍜', path: '/destinasi' },
+  { name: 'Sejarah', icon: '🏛️', path: '/destinasi' },
+  { name: 'Olahraga', icon: '⚽', path: '/event' },
+  { name: 'Workshop', icon: '🎨', path: '/event' }, 
 ];
 
 export default function HomePage() {
-  // State untuk Data Real
   const [events, setEvents] = useState<EventData[]>([]);
   const [destinations, setDestinations] = useState<DestinationData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch Data Gabungan (Parallel Fetching)
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        // Ambil Event & Destinasi secara bersamaan agar lebih cepat
         const [eventsData, placesData] = await Promise.all([
           getPublicEvents(),
-          getFeaturedDestinations(4) // Ambil 4 destinasi terbaik
+          getFeaturedDestinations(4)
         ]);
-
-        // Filter event: ambil 5 terdekat saja untuk homepage
         setEvents(eventsData.slice(0, 5));
         setDestinations(placesData);
-
       } catch (error) {
         console.error("Gagal memuat homepage:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchAllData();
   }, []);
 
@@ -60,50 +54,14 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-gray-50 pb-20">
       
-      {/* 1. HERO SECTION (IMPACTFUL) */}
-      <section className="relative h-[500px] flex items-center justify-center">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&q=80&w=1920" 
-            alt="Hero Background" 
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-gray-50"></div>
-        </div>
-
-        {/* Content & Search */}
-        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto mt-10">
-          <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4 drop-shadow-lg tracking-tight">
-            Jelajahi Serunya <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">Jokka.</span>
-          </h1>
-          <p className="text-gray-200 text-lg md:text-xl mb-8 max-w-2xl mx-auto">
-            Temukan event musik, destinasi wisata, dan kuliner terbaik di sekitarmu hanya dalam satu aplikasi.
-          </p>
-
-          <div className="bg-white p-2 rounded-full shadow-2xl flex items-center max-w-2xl mx-auto transform transition-all hover:scale-[1.02]">
-            <div className="pl-6 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input 
-              type="text" 
-              placeholder="Cari konser, pantai, atau museum..." 
-              className="w-full px-4 py-3 outline-none text-gray-700 text-lg rounded-full"
-            />
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-bold transition">
-              Cari
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* 1. HERO SECTION (REFACTORED) */}
+      <HeroSection />
 
       {/* 2. KATEGORI CEPAT */}
       <section className="container mx-auto px-4 -mt-16 relative z-20 mb-16">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 flex flex-wrap justify-between md:justify-center gap-6 md:gap-12">
           {categories.map((cat, idx) => (
-            <Link key={idx} href={`/event?cat=${cat.name}`} className="flex flex-col items-center gap-3 group cursor-pointer">
+            <Link key={idx} href={cat.path} className="flex flex-col items-center gap-3 group cursor-pointer">
               <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-3xl group-hover:bg-blue-50 group-hover:border-blue-200 group-hover:scale-110 transition-all duration-300 shadow-sm">
                 {cat.icon}
               </div>
@@ -113,7 +71,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 3. EVENT TERLARIS (REAL DATA) */}
+      {/* 3. EVENT TERLARIS */}
       <section className="container mx-auto px-4 mb-16">
         <div className="flex justify-between items-end mb-6">
           <div>
@@ -124,12 +82,10 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          // Skeleton Loading
           <div className="flex gap-4 overflow-hidden">
             {[1,2,3,4].map(i => <div key={i} className="w-[260px] h-[380px] bg-gray-200 rounded-[2rem] animate-pulse shrink-0" />)}
           </div>
         ) : events.length > 0 ? (
-          // Data Real
           <div className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory scrollbar-hide">
             {events.map((event) => (
               <div key={event.id} className="snap-center shrink-0 w-[260px]">
@@ -177,7 +133,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 5. DESTINASI POPULER (REAL DATA) */}
+      {/* 5. DESTINASI POPULER */}
       <section className="container mx-auto px-4 mb-12">
         <div className="flex justify-between items-end mb-6">
           <div>
@@ -212,7 +168,7 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* CSS Tambahan */}
+      {/* CSS Animasi */}
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
