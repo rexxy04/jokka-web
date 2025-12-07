@@ -1,110 +1,81 @@
+// components/public/HeroSection.tsx
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const HeroSection = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'wisata' | 'event'>('wisata');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [query, setQuery] = useState('');
 
+  // Logic Pencarian
   const handleSearch = () => {
-    const targetPage = activeTab === 'wisata' ? '/destinasi' : '/event';
-    if (searchTerm.trim()) {
-      router.push(`${targetPage}?q=${encodeURIComponent(searchTerm)}`);
-    } else {
-      router.push(targetPage);
+    if (query.trim() === '') return; // Cegah pencarian kosong
+
+    // Redirect ke halaman search dengan query params
+    // Contoh url nanti: /search?q=pantai
+    router.push(`/search?q=${encodeURIComponent(query)}`);
+  };
+
+  // Logic tekan tombol Enter
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
     }
   };
 
   return (
-    <section id="hero" className="relative h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative h-[600px] flex items-center justify-center">
       
-      {/* --- BAGIAN BACKGROUND --- */}
-      <img 
-        src="/images/wil-house.png" 
-        alt="Background Kota" 
-        className="absolute inset-0 z-0 w-full h-full object-cover"
-      />
-      
-      {/* Overlay Hitam Transparan (Supaya teks terbaca) */}
-      <div className="absolute inset-0 bg-black/40 z-10" />
-      {/* ------------------------- */}
+      {/* Background Image with Overlay */}
+      <div className="absolute inset-0 z-0">
+        <img 
+          src="/images/Hero-image-jokka.png" // Pastikan path gambar benar
+          alt="Hero Background" 
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay Gradient untuk Text Readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-gray-50"></div>
+      </div>
 
-      {/* Konten Utama (Teks & Search) */}
-      <div className="relative z-20 container mx-auto px-4 text-center">
-        <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 drop-shadow-lg">
-          Jelajahi Sudut Kota <br className="hidden md:block" />
-          <span className="text-yellow-400">Tanpa Batas.</span>
+      {/* Content */}
+      <div className="relative z-10 text-center px-4 max-w-4xl mx-auto mt-10">
+        
+        <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4 drop-shadow-lg tracking-tight animate-fade-in-up">
+          Jelajahi Serunya <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">Jokka.</span>
         </h1>
-        <p className="text-gray-200 text-lg md:text-xl mb-8 max-w-2xl mx-auto drop-shadow-md">
-          Temukan destinasi wisata terbaik dan event seru yang sedang berlangsung di sekitarmu.
+        
+        <p className="text-gray-200 text-lg md:text-xl mb-8 max-w-2xl mx-auto animate-fade-in-up delay-100">
+          Temukan event musik, destinasi wisata, dan kuliner terbaik di sekitarmu hanya dalam satu aplikasi.
         </p>
 
-        {/* Search Widget */}
-        <div className="bg-white p-2 rounded-2xl shadow-2xl max-w-3xl mx-auto">
+        {/* Search Bar Besar */}
+        <div className="bg-white p-2 rounded-full shadow-2xl flex items-center max-w-2xl mx-auto transform transition-all hover:scale-[1.02] focus-within:scale-[1.02] focus-within:ring-4 focus-within:ring-blue-500/30 animate-fade-in-up delay-200">
           
-          {/* Tab Toggle */}
-          <div className="flex p-1 bg-gray-100 rounded-xl mb-4">
-            <button 
-              onClick={() => setActiveTab('wisata')}
-              className={`flex-1 py-3 text-sm font-semibold rounded-lg transition-all ${
-                activeTab === 'wisata' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              🏞️ Tempat Wisata
-            </button>
-            <button 
-              onClick={() => setActiveTab('event')}
-              className={`flex-1 py-3 text-sm font-semibold rounded-lg transition-all ${
-                activeTab === 'event' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              🎫 Event & Show
-            </button>
+          <div className="pl-6 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
+          
+          <input 
+            type="text" 
+            placeholder="Cari konser, pantai, atau museum..." 
+            className="w-full px-4 py-3 outline-none text-gray-700 text-lg rounded-full placeholder:text-gray-400 bg-transparent"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          
+          <button 
+            onClick={handleSearch}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-bold transition shadow-lg hover:shadow-blue-500/30 active:scale-95"
+          >
+            Cari
+          </button>
 
-          {/* Input Form */}
-          <div className="flex flex-col md:flex-row gap-3 px-4 pb-4">
-            {activeTab === 'wisata' ? (
-              <>
-                <input 
-                  type="text" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Mau kemana? (Cth: Pantai, Museum...)" 
-                  className="grow p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
-                />
-                <select className="p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600 bg-white">
-                  <option>Semua Kategori</option>
-                  <option>Alam</option>
-                  <option>Kuliner</option>
-                </select>
-              </>
-            ) : (
-              <>
-                <input 
-                  type="text" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Cari event? (Cth: Konser Jazz...)" 
-                  className="grow p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
-                />
-                <input 
-                  type="date"
-                  className="p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600"
-                />
-              </>
-            )}
-            
-            <button 
-              onClick={handleSearch}
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg hover:shadow-blue-500/30"
-            >
-              Cari
-            </button>
-          </div>
         </div>
+
       </div>
     </section>
   );

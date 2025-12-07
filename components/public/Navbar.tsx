@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore
+import { auth, db } from '@/lib/firebase'; // Import db
 import Button from '@/components/ui/Button'; 
 
 const Navbar = () => {
@@ -12,24 +13,48 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // State Khusus untuk Foto Profil (dari Database)
+  const [dbPhoto, setDbPhoto] = useState<string | null>(null);
 
-  // Listener status login
+  // Listener status login & Fetch Data Profil
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      if (currentUser) {
+        // Jika login, cek database untuk foto terbaru
+        try {
+          const docRef = doc(db, "users", currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            // Prioritas: Foto di DB > Foto Google > Null
+            setDbPhoto(userData.photoURL || currentUser.photoURL);
+          } else {
+            // Jika data DB belum ada, pakai foto bawaan Google
+            setDbPhoto(currentUser.photoURL);
+          }
+        } catch (error) {
+          console.error("Gagal ambil foto navbar:", error);
+          setDbPhoto(currentUser.photoURL); // Fallback
+        }
+      } else {
+        setDbPhoto(null);
+      }
+
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // Fungsi Logout (Opsional: bisa dipasang di dropdown avatar nanti)
   const handleLogout = async () => {
     await signOut(auth);
     router.push('/');
     setIsOpen(false);
   };
 
-  // Helper: Ambil Inisial Nama (Misal: "Dylan" -> "D")
   const getInitials = (name: string | null) => {
     return name ? name.charAt(0).toUpperCase() : "U";
   };
@@ -62,23 +87,32 @@ const Navbar = () => {
             </Link>
           </div>
 
-          {/* AUTH SECTION (LOGIC UTAMA DISINI) */}
+          {/* AUTH SECTION */}
           <div className="hidden md:flex items-center space-x-4">
             {loading ? (
-              // Skeleton loading kecil kalau status auth belum siap
               <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
             ) : user ? (
-              // JIKA LOGIN: Tampilkan Avatar Profil
+              // JIKA LOGIN
               <Link href="/profile" className="flex items-center gap-3 group">
                 <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition">
                   Halo, {user.displayName || "User"}
                 </span>
-                <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-600 font-bold text-lg shadow-sm group-hover:shadow-md transition">
-                  {getInitials(user.displayName)}
+                
+                {/* LOGIC FOTO PROFIL */}
+                <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-600 font-bold text-lg shadow-sm group-hover:shadow-md transition overflow-hidden">
+                  {dbPhoto ? (
+                    <img 
+                        src={dbPhoto} 
+                        alt="Profil" 
+                        className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <span>{getInitials(user.displayName)}</span>
+                  )}
                 </div>
               </Link>
             ) : (
-              // JIKA BELUM LOGIN: Tombol Masuk/Daftar
+              // JIKA BELUM LOGIN
               <>
                 <Link href="/login" className="text-gray-600 hover:text-blue-600 font-medium px-4 py-2 transition">
                   Masuk
@@ -117,11 +151,14 @@ const Navbar = () => {
           
           <div className="flex flex-col gap-3 pt-2">
             {user ? (
-              // Mobile View jika Login
               <>
                 <Link href="/profile" className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg text-blue-800 font-bold" onClick={() => setIsOpen(false)}>
-                  <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-sm">
-                    {getInitials(user.displayName)}
+                  <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-sm overflow-hidden">
+                    {dbPhoto ? (
+                        <img src={dbPhoto} alt="Profil" className="w-full h-full object-cover" />
+                    ) : (
+                        <span>{getInitials(user.displayName)}</span>
+                    )}
                   </div>
                   Profil Saya
                 </Link>
@@ -130,7 +167,6 @@ const Navbar = () => {
                 </button>
               </>
             ) : (
-              // Mobile View jika Belum Login
               <>
                 <Link href="/login" className="text-center text-gray-600 font-medium py-2 border border-gray-200 rounded-lg" onClick={() => setIsOpen(false)}>Masuk</Link>
                 <Button href="/register" variant="primary" className="w-full justify-center">Daftar Sekarang</Button>

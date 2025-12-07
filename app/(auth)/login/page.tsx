@@ -3,11 +3,12 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import AuthCard from '@/components/public/AuthCard'; // Pastikan path import ini benar sesuai folder component kamu
+import AuthCard from '@/components/public/AuthCard';
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
-// Import Service Logic yang sudah kita buat
-import { loginService } from '@/lib/services/auth';
+import { loginService, loginWithGoogle } from '@/lib/services/auth';
+// 1. Pastikan StatusModal yang diimport adalah versi terbaru (yang ada props type)
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,39 +20,69 @@ export default function LoginPage() {
     password: '',
   });
 
+  const [showModal, setShowModal] = useState(false);
+  // 2. UPDATE STATE: Tambahkan field 'type'
+  const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ 
+    title: '', 
+    message: '', 
+    type: 'success' 
+  });
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleRedirect = (role: string) => {
+    if (role === 'admin') {
+      router.push('/admin/dashboard'); 
+    } else if (role === 'eo') {
+      router.push('/eo/dashboard');
+    } else {
+      router.push('/');
+    }
+  };
+
+  // --- LOGIC LOGIN EMAIL ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 1. Panggil Service Login (Logic Backend)
-      // Service ini akan mengembalikan object { user, role }
       const result = await loginService(formData.email, formData.password);
-      
-      console.log("LOGIN RESULT:", result);
-      // 2. SMART REDIRECT LOGIC
-      // Arahkan user sesuai Role-nya
-      if (result.role === 'admin') {
-        // Redirect ke Dashboard Admin (Nanti kita buat halamannya)
-        router.push('/admin/dashboard'); 
-        // alert("Login sebagai Admin"); // Debugging sementara kalau halaman belum ada
-      } else if (result.role === 'eo') {
-        // Redirect ke Dashboard EO
-        router.push('/eo/dashboard');
-      } else {
-        // User Biasa -> Ke Homepage
-        router.push('/');
-      }
+      handleRedirect(result.role);
       
     } catch (error: any) {
-      // Tampilkan pesan error (Email belum verifikasi / EO Pending / Password Salah)
-      alert(error.message); 
+      // 3. SET TYPE 'ERROR' SAAT GAGAL
+      setModalContent({
+        title: "Login Gagal",
+        message: error.message || "Periksa kembali email dan password Anda.",
+        type: 'error'
+      });
+      setShowModal(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- LOGIC LOGIN GOOGLE ---
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await loginWithGoogle();
+      handleRedirect(result.role);
+      
+    } catch (error: any) {
+      // 4. SET TYPE 'ERROR' SAAT GAGAL
+
+      if (error.code === 'auth/popup-closed-by-user') {
+        return; 
+      }
+      
+      setModalContent({ 
+        title: "Gagal Masuk", 
+        message: "Terjadi kesalahan saat mencoba masuk dengan Google. Pastikan popup tidak diblokir.",
+        type: 'error'
+      });
+      setShowModal(true);
     }
   };
 
@@ -105,7 +136,6 @@ export default function LoginPage() {
           </Button>
         </div>
 
-        {/* Pemisah UI */}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-300"></div>
@@ -115,15 +145,18 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Tombol Google Placeholder */}
         <div>
-          <Button variant="outline" type="button" className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50">
+          <Button 
+            variant="outline" 
+            type="button" 
+            onClick={handleGoogleLogin} 
+            className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 flex items-center justify-center"
+          >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.16-7.27 3.46 0 6.64 1.9 8.05 3.36l2.37-2.37C20.25 3.38 16.69 2 12.16 2 6.64 2 2 6.64 2 12s4.64 10 10.16 10c7.47 0 10.65-5.1 10.65-10 0-.93-.14-1.46-.35-2.9z"/></svg>
             Masuk dengan Google
           </Button>
         </div>
 
-        {/* Link Register */}
         <div className="text-sm text-center mt-6">
           <span className="text-gray-600">Belum punya akun? </span>
           <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500 transition">
@@ -131,6 +164,15 @@ export default function LoginPage() {
           </Link>
         </div>
       </form>
+
+      {/* 5. PASS PROPS TYPE KE MODAL */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        title={modalContent.title}
+        message={modalContent.message}
+        type={modalContent.type} // <-- Ini penting agar icon berubah
+      />
     </AuthCard>
   );
 }
