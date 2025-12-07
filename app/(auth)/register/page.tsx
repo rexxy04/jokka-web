@@ -92,6 +92,12 @@ export default function RegisterPage() {
       
     } catch (error: any) {
       // 6. SET TYPE 'ERROR' SAAT GAGAL
+
+      if (error.code === 'auth/popup-closed-by-user') {
+        return;
+      }
+
+      
       setModalContent({ 
         title: "Gagal Mendaftar", 
         message: "Terjadi kesalahan saat mencoba mendaftar dengan Google.",

@@ -72,6 +72,11 @@ export default function LoginPage() {
       
     } catch (error: any) {
       // 4. SET TYPE 'ERROR' SAAT GAGAL
+
+      if (error.code === 'auth/popup-closed-by-user') {
+        return; 
+      }
+      
       setModalContent({ 
         title: "Gagal Masuk", 
         message: "Terjadi kesalahan saat mencoba masuk dengan Google. Pastikan popup tidak diblokir.",
