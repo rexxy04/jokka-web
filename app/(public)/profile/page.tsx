@@ -11,7 +11,10 @@ import { doc, getDoc } from 'firebase/firestore';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/input';
 import Card from '@/components/ui/card';
-import Modal from '@/components/ui/Modal';
+import Modal from '@/components/ui/Modal'; 
+import StatusModal from '@/components/ui/StatusModal'; 
+// 1. IMPORT CONFIRM MODAL
+import ConfirmModal from '@/components/ui/ConfirmModal'; 
 
 // Services
 import { getUserTransactions, Transaction } from '@/lib/services/transaction';
@@ -20,7 +23,7 @@ import {
   updateUserData, 
   changeUserPassword, 
   sendResetPasswordLink,
-  updateUserProfileImage // <--- Import Service Baru
+  updateUserProfileImage
 } from '@/lib/services/auth';
 
 export default function ProfilePage() {
@@ -46,6 +49,14 @@ export default function ProfilePage() {
   // Data Tiket & Wishlist
   const [tickets, setTickets] = useState<Transaction[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+
+  // State Status Modal
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusModalContent, setStatusModalContent] = useState({ title: '', message: '' });
+  const [onModalCloseAction, setOnModalCloseAction] = useState<(() => void) | null>(null);
+
+  // 2. STATE UNTUK CONFIRM MODAL (LOGOUT)
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -74,11 +85,14 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [router]);
 
-  const handleLogout = async () => {
-    if (confirm("Yakin ingin keluar?")) {
+  // 3. LOGIC LOGOUT DIGANTI
+  const handleLogoutClick = () => {
+      setShowLogoutModal(true); // Munculkan modal confirm
+  };
+
+  const confirmLogout = async () => {
       await signOut(auth);
       router.push('/');
-    }
   };
 
   const getStatusColor = (status: string) => {
@@ -89,7 +103,6 @@ export default function ProfilePage() {
 
   // --- LOGIC GANTI FOTO ---
   const handlePhotoClick = () => {
-    // Trigger klik pada input file yang tersembunyi
     fileInputRef.current?.click();
   };
 
@@ -97,23 +110,21 @@ export default function ProfilePage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
-      // Validasi ukuran (Max 2MB)
       if (file.size > 2 * 1024 * 1024) {
-        alert("Ukuran foto terlalu besar! Maksimal 2MB.");
+        setStatusModalContent({ title: "Gagal Upload", message: "Ukuran foto terlalu besar! Maksimal 2MB." });
+        setShowStatusModal(true);
         return;
       }
 
       setUploadingPhoto(true);
       try {
-        // Panggil Service Upload
         const res = await updateUserProfileImage(user, file);
-        alert("Foto profil berhasil diperbarui! 📸");
-        
-        // Update state lokal biar langsung berubah
+        setStatusModalContent({ title: "Berhasil! 📸", message: "Foto profil Anda telah diperbarui." });
+        setShowStatusModal(true);
         setUser({ ...user, photoURL: res.photoURL });
-        
       } catch (error: any) {
-        alert(error.message);
+        setStatusModalContent({ title: "Gagal Upload", message: error.message });
+        setShowStatusModal(true);
       } finally {
         setUploadingPhoto(false);
       }
@@ -126,11 +137,13 @@ export default function ProfilePage() {
     setLoadingSaveProfile(true);
     try {
       await updateUserData(user.uid, { phone: phoneInput });
-      alert("Nomor HP berhasil diperbarui! ✅");
+      setStatusModalContent({ title: "Data Disimpan ✅", message: "Informasi profil berhasil diperbarui." });
+      setShowStatusModal(true);
       setIsEditingProfile(false);
       setUserDataFirestore({ ...userDataFirestore, phone: phoneInput });
     } catch (error: any) {
-      alert(error.message);
+      setStatusModalContent({ title: "Gagal Menyimpan", message: error.message });
+      setShowStatusModal(true);
     } finally {
       setLoadingSaveProfile(false);
     }
@@ -139,16 +152,24 @@ export default function ProfilePage() {
   // --- LOGIC GANTI PASSWORD ---
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passForm.new !== passForm.confirm) return alert("Konfirmasi password baru tidak cocok!");
-    
+    if (passForm.new !== passForm.confirm) {
+        setStatusModalContent({ title: "Validasi Gagal", message: "Konfirmasi password baru tidak cocok!" });
+        setShowStatusModal(true);
+        return;
+    }
     setLoadingPass(true);
     try {
       await changeUserPassword(user, passForm.current, passForm.new);
-      alert("Password berhasil diubah! Silakan login ulang.");
-      await signOut(auth);
-      router.push('/login');
+      setIsPasswordModalOpen(false);
+      setStatusModalContent({ title: "Password Berubah 🔒", message: "Password berhasil diubah! Silakan login ulang." });
+      setOnModalCloseAction(() => async () => {
+         await signOut(auth);
+         router.push('/login');
+      });
+      setShowStatusModal(true);
     } catch (error: any) {
-      alert(error.message);
+      setStatusModalContent({ title: "Gagal Ganti Password", message: error.message });
+      setShowStatusModal(true);
     } finally {
       setLoadingPass(false);
     }
@@ -158,10 +179,20 @@ export default function ProfilePage() {
     if (!user?.email) return;
     try {
       await sendResetPasswordLink(user.email);
-      alert(`Link reset password telah dikirim ke ${user.email}.`);
+      setStatusModalContent({ title: "Email Terkirim 📧", message: `Link reset password telah dikirim ke ${user.email}.` });
+      setShowStatusModal(true);
     } catch (error: any) {
-      alert("Gagal mengirim email reset.");
+      setStatusModalContent({ title: "Gagal", message: "Gagal mengirim email reset password." });
+      setShowStatusModal(true);
     }
+  };
+
+  const handleCloseStatusModal = () => {
+      setShowStatusModal(false);
+      if (onModalCloseAction) {
+          onModalCloseAction();
+          setOnModalCloseAction(null);
+      }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Memuat profil...</div>;
@@ -176,8 +207,7 @@ export default function ProfilePage() {
           {/* KOLOM KIRI */}
           <div className="md:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              
-              {/* --- BAGIAN FOTO PROFIL --- */}
+              {/* Foto Profil */}
               <div 
                 onClick={handlePhotoClick}
                 className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-4 overflow-hidden relative group cursor-pointer border-4 ${uploadingPhoto ? 'border-blue-400 animate-pulse' : 'border-gray-100'}`}
@@ -189,22 +219,12 @@ export default function ProfilePage() {
                     {user?.displayName?.charAt(0).toUpperCase() || "U"}
                   </div>
                 )}
-                
-                {/* Overlay Hover */}
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white text-xs font-medium">
                   {uploadingPhoto ? "Uploading..." : "Ganti Foto"}
                 </div>
               </div>
 
-              {/* Input File Tersembunyi */}
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept="image/*" 
-                className="hidden" 
-              />
-              {/* --------------------------- */}
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
 
               <h2 className="text-xl font-bold text-gray-900">{user?.displayName}</h2>
               <p className="text-sm text-gray-500">{user?.email}</p>
@@ -214,7 +234,8 @@ export default function ProfilePage() {
               <Button onClick={() => setIsPasswordModalOpen(true)} variant="outline" className="w-full justify-center text-sm">
                 🔒 Ganti Password
               </Button>
-              <Button onClick={handleLogout} variant="outline" className="w-full justify-center text-sm text-red-600 border-red-200 hover:bg-red-50">
+              {/* TOMBOL LOGOUT MENGARAH KE MODAL */}
+              <Button onClick={handleLogoutClick} variant="outline" className="w-full justify-center text-sm text-red-600 border-red-200 hover:bg-red-50">
                 🚪 Keluar
               </Button>
             </div>
@@ -222,15 +243,12 @@ export default function ProfilePage() {
 
           {/* KOLOM KANAN */}
           <div className="md:col-span-2 space-y-8">
-            
             {/* DATA AKUN */}
             <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold text-gray-900">Data Akun</h3>
                 {!isEditingProfile ? (
-                  <button onClick={() => setIsEditingProfile(true)} className="text-blue-600 text-sm font-semibold hover:underline">
-                    Edit Data
-                  </button>
+                  <button onClick={() => setIsEditingProfile(true)} className="text-blue-600 text-sm font-semibold hover:underline">Edit Data</button>
                 ) : (
                   <div className="flex gap-3">
                     <button onClick={() => setIsEditingProfile(false)} className="text-gray-500 text-sm hover:underline">Batal</button>
@@ -240,7 +258,6 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Nama Lengkap</label>
@@ -256,13 +273,7 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Nomor Telepon</label>
-                  <Input 
-                    value={phoneInput} 
-                    onChange={(e) => setPhoneInput(e.target.value)}
-                    disabled={!isEditingProfile} 
-                    className={isEditingProfile ? "bg-white border-blue-300 ring-2 ring-blue-100" : "bg-gray-50"} 
-                    placeholder="08..."
-                  />
+                  <Input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} disabled={!isEditingProfile} className={isEditingProfile ? "bg-white border-blue-300 ring-2 ring-blue-100" : "bg-gray-50"} placeholder="08..." />
                 </div>
               </div>
             </section>
@@ -271,9 +282,7 @@ export default function ProfilePage() {
             <section>
               <h3 className="text-lg font-bold text-gray-900 mb-4 px-1">Tiket Saya 🎫</h3>
               {tickets.length === 0 ? (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
-                  Belum ada tiket.
-                </div>
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">Belum ada tiket.</div>
               ) : (
                 <div className="space-y-4">
                   {tickets.map((ticket) => (
@@ -302,79 +311,49 @@ export default function ProfilePage() {
                 <h3 className="text-lg font-bold text-gray-900">Disimpan / Wishlist ❤️</h3>
                 <Link href="/destinasi" className="text-sm text-blue-600 hover:underline">Tambah lagi</Link>
               </div>
-
               {wishlist.length === 0 ? (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
-                  Belum ada item disimpan. Yuk cari tempat seru!
-                </div>
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">Belum ada item disimpan. Yuk cari tempat seru!</div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {wishlist.map((item) => (
-                    <Card 
-                      key={item.id}
-                      title={item.title} 
-                      category={item.category}
-                      image={item.image} 
-                      href={item.itemType === 'event' ? `/event/${item.itemId}` : `/destinasi/${item.itemId}`} 
-                    />
+                    <Card key={item.id} title={item.title} category={item.category} image={item.image} href={item.itemType === 'event' ? `/event/${item.itemId}` : `/destinasi/${item.itemId}`} />
                   ))}
                 </div>
               )}
             </section>
-
           </div>
         </div>
       </div>
 
-      {/* MODAL GANTI PASSWORD */}
-      <Modal 
-        isOpen={isPasswordModalOpen} 
-        onClose={() => setIsPasswordModalOpen(false)} 
-        title="Ganti Password"
-      >
+      {/* Modal Ganti Password */}
+      <Modal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Ganti Password">
         <form onSubmit={handleChangePassword} className="space-y-4">
-          <Input 
-            type="password" 
-            placeholder="Password Saat Ini" 
-            label="Password Lama"
-            value={passForm.current}
-            onChange={(e) => setPassForm({...passForm, current: e.target.value})}
-            required
-          />
-          <Input 
-            type="password" 
-            placeholder="Password Baru" 
-            label="Password Baru"
-            value={passForm.new}
-            onChange={(e) => setPassForm({...passForm, new: e.target.value})}
-            required
-          />
-          <Input 
-            type="password" 
-            placeholder="Ulangi Password Baru" 
-            label="Konfirmasi Password Baru"
-            value={passForm.confirm}
-            onChange={(e) => setPassForm({...passForm, confirm: e.target.value})}
-            required
-          />
-          
+          <Input type="password" placeholder="Password Saat Ini" label="Password Lama" value={passForm.current} onChange={(e) => setPassForm({...passForm, current: e.target.value})} required />
+          <Input type="password" placeholder="Password Baru" label="Password Baru" value={passForm.new} onChange={(e) => setPassForm({...passForm, new: e.target.value})} required />
+          <Input type="password" placeholder="Ulangi Password Baru" label="Konfirmasi Password Baru" value={passForm.confirm} onChange={(e) => setPassForm({...passForm, confirm: e.target.value})} required />
           <div className="pt-2">
-            <Button type="submit" variant="primary" className="w-full justify-center" disabled={loadingPass}>
-              {loadingPass ? "Memproses..." : "Ganti Password"}
-            </Button>
+            <Button type="submit" variant="primary" className="w-full justify-center" disabled={loadingPass}>{loadingPass ? "Memproses..." : "Ganti Password"}</Button>
           </div>
-
           <div className="text-center pt-2">
-            <button 
-              type="button"
-              onClick={handleForgotPassword}
-              className="text-xs text-blue-600 hover:underline"
-            >
-              Lupa password saat ini? Kirim link reset
-            </button>
+            <button type="button" onClick={handleForgotPassword} className="text-xs text-blue-600 hover:underline">Lupa password saat ini? Kirim link reset</button>
           </div>
         </form>
       </Modal>
+
+      {/* Status Modal (Success/Error) */}
+      <StatusModal isOpen={showStatusModal} onClose={handleCloseStatusModal} title={statusModalContent.title} message={statusModalContent.message} />
+
+      {/* 4. RENDER CONFIRM MODAL UNTUK LOGOUT */}
+      <ConfirmModal 
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={confirmLogout}
+        title="Konfirmasi Logout"
+        message="Apakah Anda yakin ingin keluar dari akun ini?"
+        confirmText="Ya, Keluar"
+        cancelText="Batal"
+        isDanger={true}
+      />
 
     </main>
   );

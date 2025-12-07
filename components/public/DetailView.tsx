@@ -7,6 +7,8 @@ import { auth } from '@/lib/firebase';
 import Button from '@/components/ui/Button';
 import { saveTransaction } from '@/lib/services/transaction';
 import { toggleWishlist, checkIsLoved } from '@/lib/services/wishlist';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 // Tipe Data Tiket
 interface TicketType {
@@ -25,13 +27,12 @@ interface DetailViewProps {
   description?: string;
   location?: string;
   date?: string;
-  price?: string; // (Ini cuma display range harga)
+  price?: string;
   eventId?: string;
-  rawPrice?: number; // (Tidak dipakai lagi, kita ambil dari tickets)
+  rawPrice?: number;
   type?: 'event' | 'place';
   lat?: number;
   lng?: number;
-  // PROPS BARU: Menerima Array Tiket
   tickets?: TicketType[];
 }
 
@@ -49,15 +50,21 @@ const DetailView: React.FC<DetailViewProps> = ({
   type = 'place',
   lat,
   lng,
-  tickets = [] // Default kosong jika bukan event
+  tickets = []
 }) => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [isLoved, setIsLoved] = useState(false);
 
   // STATE UNTUK PILIH TIKET
-  const [selectedTicketIdx, setSelectedTicketIdx] = useState<number>(-1); // -1 artinya belum pilih
+  const [selectedTicketIdx, setSelectedTicketIdx] = useState<number>(-1);
   const [qty, setQty] = useState(1);
+
+  // 2. State untuk StatusModal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  // Action khusus yang dijalankan setelah modal ditutup (misal: redirect ke login/profile)
+  const [onModalCloseAction, setOnModalCloseAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     const checkLoveStatus = async () => {
@@ -87,30 +94,41 @@ const DetailView: React.FC<DetailViewProps> = ({
       });
     } catch (error) {
       setIsLoved(previousState);
-      alert("Gagal menambahkan ke wishlist");
+      // Ganti Alert jadi Modal
+      setModalContent({ title: "Gagal", message: "Gagal memperbarui wishlist." });
+      setShowModal(true);
     }
   };
 
   // Logic Bayar yang Diperbarui
   const handleBuyTicket = async () => {
     const user = auth.currentUser;
+    
+    // Validasi Login
     if (!user) {
-      alert("Silakan login terlebih dahulu untuk membeli tiket.");
-      router.push('/login');
+      setModalContent({ 
+        title: "Login Diperlukan", 
+        message: "Silakan login terlebih dahulu untuk membeli tiket." 
+      });
+      setOnModalCloseAction(() => () => router.push('/login'));
+      setShowModal(true);
       return;
     }
 
+    // Validasi Pilih Tiket
     if (selectedTicketIdx === -1) {
-      alert("Pilih jenis tiket terlebih dahulu!");
+      setModalContent({ title: "Pilih Tiket", message: "Silakan pilih jenis tiket yang ingin dibeli terlebih dahulu." });
+      setShowModal(true);
       return;
     }
 
     const ticket = tickets[selectedTicketIdx];
     
-    // Validasi Stok (Client Side)
+    // Validasi Stok
     const available = ticket.stock - (ticket.sold || 0);
     if (qty > available) {
-      alert("Maaf, stok tiket tidak mencukupi.");
+      setModalContent({ title: "Stok Habis", message: "Maaf, jumlah tiket yang diminta melebihi stok yang tersedia." });
+      setShowModal(true);
       return;
     }
 
@@ -118,13 +136,12 @@ const DetailView: React.FC<DetailViewProps> = ({
 
     try {
       const orderId = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const totalPrice = ticket.price * qty;
-
+      
       const response = await fetch('/api/tokenizer', {
         method: 'POST',
         body: JSON.stringify({
           id: orderId,
-          productName: `${title} - ${ticket.name}`, // Nama Event + Jenis Tiket
+          productName: `${title} - ${ticket.name}`,
           price: ticket.price,
           quantity: qty,
           buyerName: user.displayName || "User Jokka",
@@ -136,23 +153,29 @@ const DetailView: React.FC<DetailViewProps> = ({
       const data = await response.json();
       if (!data.token) throw new Error("Gagal mendapatkan token pembayaran.");
 
+      // @ts-ignore (Kalo error typescript window.snap)
       window.snap.pay(data.token, {
         onSuccess: async function(result: any) {
           await saveTransaction({
             orderId: result.order_id,
             eventId: eventId,
-            eventName: `${title} (${ticket.name})`, // Simpan info tiket di nama transaksi
+            eventName: `${title} (${ticket.name})`,
             userId: user.uid,
             amount: Number(result.gross_amount),
             status: result.transaction_status,
             paymentType: result.payment_type,
             transactionTime: result.transaction_time,
-            // Opsional: Simpan detail tiket yang dibeli
             ticketType: ticket.name,
             qty: qty
           });
-          alert("Pembayaran Berhasil! Tiket masuk ke Profil.");
-          router.push('/profile');
+          
+          // SUKSES -> MODAL -> REDIRECT PROFILE
+          setModalContent({ 
+            title: "Pembayaran Berhasil! 🎉", 
+            message: "Tiket telah berhasil dibeli dan tersimpan di menu Profil Anda." 
+          });
+          setOnModalCloseAction(() => () => router.push('/profile'));
+          setShowModal(true);
         },
         onPending: async function(result: any) {
           await saveTransaction({
@@ -165,31 +188,52 @@ const DetailView: React.FC<DetailViewProps> = ({
             paymentType: result.payment_type,
             transactionTime: result.transaction_time
           });
-          alert("Menunggu Pembayaran. Cek Profil Anda.");
-          router.push('/profile');
+          
+          // PENDING -> MODAL -> REDIRECT PROFILE
+          setModalContent({ 
+            title: "Menunggu Pembayaran ⏳", 
+            message: "Silakan selesaikan pembayaran Anda. Status tiket dapat dicek di Profil." 
+          });
+          setOnModalCloseAction(() => () => router.push('/profile'));
+          setShowModal(true);
         },
-        onError: function(result: any) { alert("Pembayaran Gagal!"); },
-        onClose: function() { /* User tutup popup */ }
+        onError: function(result: any) {
+          setModalContent({ title: "Pembayaran Gagal", message: "Transaksi gagal atau dibatalkan." });
+          setShowModal(true);
+        },
+        onClose: function() { /* User tutup popup snap, tidak perlu action apa2 */ }
       });
 
     } catch (error: any) {
-      alert("Terjadi kesalahan: " + error.message);
+      setModalContent({ title: "Terjadi Kesalahan", message: error.message });
+      setShowModal(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper Format Rupiah
   const formatRupiah = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
   const handleOpenMaps = () => {
     if (lat && lng) {
       window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
     } else if (location) {
+      // @ts-ignore
       window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
     } else {
-      alert("Lokasi belum diatur.");
+      setModalContent({ title: "Lokasi Tidak Tersedia", message: "Koordinat lokasi belum diatur oleh penyelenggara." });
+      setShowModal(true);
     }
+  };
+
+  // Handler Tutup Modal
+  const handleCloseModal = () => {
+      setShowModal(false);
+      // Jika ada action tertunda (seperti redirect), jalankan sekarang
+      if (onModalCloseAction) {
+          onModalCloseAction();
+          setOnModalCloseAction(null); // Reset
+      }
   };
 
   return (
@@ -280,7 +324,7 @@ const DetailView: React.FC<DetailViewProps> = ({
               </div>
             )}
 
-            {/* QUANTITY COUNTER (Muncul jika tiket sudah dipilih) */}
+            {/* QUANTITY COUNTER */}
             {selectedTicketIdx !== -1 && (
               <div className="flex items-center justify-between mb-6 bg-white p-3 rounded-lg border border-gray-200">
                 <span className="text-sm font-medium text-gray-600">Jumlah Tiket</span>
@@ -333,6 +377,14 @@ const DetailView: React.FC<DetailViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 3. Render Status Modal */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={handleCloseModal} 
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </article>
   );
 };

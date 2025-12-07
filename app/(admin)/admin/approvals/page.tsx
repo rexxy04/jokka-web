@@ -4,11 +4,17 @@ import React, { useEffect, useState } from 'react';
 import Button from '@/components/ui/Button';
 // Import Service
 import { getPendingEOs, approveEO, rejectEO, EOData } from '@/lib/services/admin';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function ApprovalPage() {
   const [eos, setEos] = useState<EOData[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
 
   // Fetch data saat halaman pertama kali dimuat
   useEffect(() => {
@@ -23,14 +29,28 @@ export default function ApprovalPage() {
   };
 
   const handleApprove = async (id: string, name: string) => {
+    // Kita tetap pakai confirm bawaan untuk keamanan (konfirmasi aksi penting)
     if (!confirm(`Yakin ingin menyetujui ${name}? EO ini akan bisa login & buat event.`)) return;
+    
     setProcessingId(id);
     try {
       await approveEO(id);
-      alert("EO Berhasil Disetujui! ✅");
+      
+      // 🟢 GANTI alert("EO Berhasil Disetujui! ✅") DENGAN INI:
+      setModalContent({
+        title: "Berhasil Disetujui",
+        message: `Partner EO ${name} telah berhasil disetujui dan sekarang dapat mengakses sistem.`
+      });
+      setShowModal(true);
+      
       fetchData(); // Refresh tabel agar data yang sudah diapprove hilang
     } catch (error) {
-      alert("Gagal memproses approval");
+      // 🔴 GANTI alert error
+      setModalContent({
+        title: "Gagal Memproses",
+        message: "Terjadi kesalahan saat mencoba menyetujui data. Silakan coba lagi."
+      });
+      setShowModal(true);
     } finally {
       setProcessingId(null);
     }
@@ -38,13 +58,26 @@ export default function ApprovalPage() {
 
   const handleReject = async (id: string, name: string) => {
     if (!confirm(`Yakin ingin MENOLAK ${name}?`)) return;
+    
     setProcessingId(id);
     try {
       await rejectEO(id);
-      alert("EO Ditolak ❌");
+
+      // 🟢 GANTI alert("EO Ditolak ❌") DENGAN INI:
+      setModalContent({
+        title: "Berhasil Ditolak",
+        message: `Pengajuan partner ${name} telah ditolak.`
+      });
+      setShowModal(true);
+
       fetchData();
     } catch (error) {
-      alert("Gagal memproses penolakan");
+      // 🔴 GANTI alert error
+      setModalContent({
+        title: "Gagal Memproses",
+        message: "Terjadi kesalahan saat mencoba menolak data."
+      });
+      setShowModal(true);
     } finally {
       setProcessingId(null);
     }
@@ -135,6 +168,14 @@ export default function ApprovalPage() {
           </div>
         </div>
       )}
+
+      {/* 3. Render Modal di paling bawah */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </div>
   );
 }
