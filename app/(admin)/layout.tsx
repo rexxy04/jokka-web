@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/services/auth';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function AdminLayout({
   children,
@@ -13,11 +15,17 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname(); 
+  const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
   const [user, setUser] = useState<any>(null);
 
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+
   const handleLogout = async () => {
+    // Catatan: confirm() ini butuh tombol Yes/No, 
+    // jadi sementara kita biarkan confirm bawaan dulu (karena StatusModal kita cuma punya tombol Close)
     if (confirm("Yakin ingin keluar dari sesi Admin?")) {
         await signOut(auth);
         router.push('/login');
@@ -34,22 +42,45 @@ export default function AdminLayout({
           setAuthorized(true);
           setUser(currentUser);
         } else {
-          alert("Akses Ditolak. Halaman ini khusus Administrator.");
-          router.push('/');
+          // 🔴 KODE LAMA (DIHAPUS):
+          // alert("Akses Ditolak. Halaman ini khusus Administrator.");
+          // router.push('/');
+
+          // 🟢 KODE BARU (PAKAI MODAL):
+          setModalContent({
+            title: "Akses Ditolak",
+            message: "Halaman ini khusus Administrator."
+          });
+          setShowModal(true);
+          // Kita tidak langsung router.push di sini, tapi di onClose modal (lihat di bawah)
         }
       }
     });
     return () => unsubscribe();
   }, [router]);
 
+  // Jika belum authorized (Loading atau Akses Ditolak)
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-purple-50 text-purple-900">
         <p className="animate-pulse font-medium">Memuat Dashboard Admin...</p>
+        
+        {/* 3. Render Modal di sini juga agar muncul saat status "Akses Ditolak" */}
+        <StatusModal 
+            isOpen={showModal}
+            title={modalContent.title}
+            message={modalContent.message}
+            onClose={() => {
+                setShowModal(false);
+                // Jika modal ditutup saat belum authorized, berarti user ditendang keluar
+                router.push('/'); 
+            }}
+        />
       </div>
     );
   }
 
+  // Render Halaman Admin Utama
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#F3F0FF] via-[#F8F9FF] to-[#EAFBFF] font-sans text-gray-800">
       
@@ -63,7 +94,7 @@ export default function AdminLayout({
           </h1>
         </div>
         
-        {/* Menu Navigasi (LINK DIPERBAIKI DISINI) */}
+        {/* Menu Navigasi */}
         <nav className="flex-1 px-4 space-y-3 overflow-y-auto py-4">
           <SidebarItem href="/admin/dashboard" icon="dashboard" label="Dashboard" isActive={pathname === '/admin/dashboard'} />
           
@@ -71,10 +102,7 @@ export default function AdminLayout({
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verifikasi</p>
           </div>
           
-          {/* 1. Link Approval EO */}
           <SidebarItem href="/admin/approvals" icon="user-check" label="Approval EO" isActive={pathname === '/admin/approvals'} />
-          
-          {/* 2. Link Approval Event */}
           <SidebarItem href="/admin/event-approvals" icon="calendar-check" label="Approval Event" isActive={pathname === '/admin/event-approvals'} />
           
           <div className="pt-4 pb-2 px-4">
@@ -82,8 +110,6 @@ export default function AdminLayout({
           </div>
           
           <SidebarItem href="/admin/partners" icon="users" label="List Partner EO" isActive={pathname === '/admin/partners'} />
-          
-          {/* 3. Link Kelola Wisata */}
           <SidebarItem href="/admin/manage-wisata" icon="map" label="Kelola Wisata" isActive={pathname === '/admin/manage-wisata'} />
         </nav>
 
@@ -119,6 +145,14 @@ export default function AdminLayout({
           {children}
         </div>
       </main>
+
+      {/* 4. Render Modal juga di sini (untuk penggunaan lain di masa depan) */}
+      <StatusModal 
+        isOpen={showModal}
+        title={modalContent.title}
+        message={modalContent.message}
+        onClose={() => setShowModal(false)}
+      />
     </div>
   );
 }

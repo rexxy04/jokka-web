@@ -5,19 +5,26 @@ import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserProfile } from '@/lib/services/auth'; 
-import { createEvent, EventFormData, TicketData } from '@/lib/services/event'; // Import type baru
+import { createEvent, EventFormData, TicketData } from '@/lib/services/event';
 
 // Import UI Components
 import Input from '@/components/ui/input'; 
 import Button from '@/components/ui/Button';
 import FileInput from '@/components/ui/FileInput';
 import LocationPicker from '@/components/ui/LocationPicker';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function CreateEventPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [eoProfile, setEoProfile] = useState<any>(null);
+
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  const [isSuccess, setIsSuccess] = useState(false); // Penanda redirect
 
   // Cek Login
   useEffect(() => {
@@ -45,9 +52,9 @@ export default function CreateEventPage() {
     endDate: '',
   });
 
-  // STATE BARU: Array Tiket
+  // Array Tiket
   const [tickets, setTickets] = useState<TicketData[]>([
-    { name: 'Regular', price: 0, stock: 100 } // Default 1 tiket
+    { name: 'Regular', price: 0, stock: 100 }
   ]);
 
   const [poster, setPoster] = useState<File | null>(null);
@@ -66,8 +73,6 @@ export default function CreateEventPage() {
   };
 
   // --- HANDLERS KHUSUS TIKET ---
-  
-  // 1. Ubah data tiket tertentu berdasarkan index
   const handleTicketChange = (index: number, field: keyof TicketData, value: string) => {
     const newTickets = [...tickets];
     // @ts-ignore
@@ -75,14 +80,21 @@ export default function CreateEventPage() {
     setTickets(newTickets);
   };
 
-  // 2. Tambah baris tiket baru
   const addTicketVariant = () => {
     setTickets([...tickets, { name: '', price: 0, stock: 50 }]);
   };
 
-  // 3. Hapus baris tiket
   const removeTicketVariant = (index: number) => {
-    if (tickets.length === 1) return alert("Minimal harus ada 1 jenis tiket!");
+    // Ganti Alert Validation
+    if (tickets.length === 1) {
+        setModalContent({
+            title: "Tidak Bisa Hapus",
+            message: "Minimal harus ada 1 jenis tiket dalam sebuah event."
+        });
+        setIsSuccess(false);
+        setShowModal(true);
+        return;
+    }
     const newTickets = tickets.filter((_, i) => i !== index);
     setTickets(newTickets);
   };
@@ -91,21 +103,44 @@ export default function CreateEventPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validasi Status EO (Ganti Alert)
     if (eoProfile?.status !== 'verified') {
-      alert("⚠️ AKSES DITOLAK\n\nAkun belum diverifikasi Admin.");
+      setModalContent({
+        title: "Akses Dibatasi",
+        message: "Akun Anda belum diverifikasi oleh Admin. Anda belum bisa membuat event."
+      });
+      setIsSuccess(false);
+      setShowModal(true);
       return;
     }
 
-    if (!poster) return alert("Wajib upload poster event!");
-    if (!formData.locationName) return alert("Wajib pilih lokasi!");
+    // Validasi Poster (Ganti Alert)
+    if (!poster) {
+        setModalContent({ title: "Poster Wajib", message: "Mohon upload poster event Anda agar terlihat menarik!" });
+        setIsSuccess(false);
+        setShowModal(true);
+        return;
+    }
+
+    // Validasi Lokasi (Ganti Alert)
+    if (!formData.locationName) {
+        setModalContent({ title: "Lokasi Kosong", message: "Silakan pilih lokasi event melalui peta." });
+        setIsSuccess(false);
+        setShowModal(true);
+        return;
+    }
     
     // Validasi Tiket
     const isTicketValid = tickets.every(t => t.name && t.stock > 0);
-    if (!isTicketValid) return alert("Pastikan semua data tiket (Nama & Stok) terisi!");
+    if (!isTicketValid) {
+        setModalContent({ title: "Data Tiket Belum Lengkap", message: "Pastikan nama tiket terisi dan stok minimal 1." });
+        setIsSuccess(false);
+        setShowModal(true);
+        return;
+    }
 
     setLoading(true);
     try {
-      // Gabungkan data form + array tiket
       const finalData: EventFormData = {
         ...formData,
         tickets: tickets
@@ -113,12 +148,33 @@ export default function CreateEventPage() {
 
       await createEvent(finalData, poster, user.uid);
       
-      alert("Event berhasil dibuat! Menunggu persetujuan Admin.");
-      router.push('/eo/my-events');
+      // SUKSES (Ganti Alert)
+      setModalContent({
+        title: "Event Berhasil Dibuat! 🎉",
+        message: "Event Anda telah tersimpan dan sedang menunggu persetujuan Admin untuk tayang."
+      });
+      setIsSuccess(true); // Set true agar redirect saat close
+      setShowModal(true);
+
     } catch (error: any) {
-      alert(error.message);
+      // ERROR (Ganti Alert)
+      setModalContent({
+        title: "Gagal Membuat Event",
+        message: error.message || "Terjadi kesalahan sistem."
+      });
+      setIsSuccess(false);
+      setShowModal(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handler Tutup Modal
+  const handleCloseModal = () => {
+    setShowModal(false);
+    // Redirect hanya jika sukses create event
+    if (isSuccess) {
+        router.push('/eo/my-events');
     }
   };
 
@@ -128,7 +184,7 @@ export default function CreateEventPage() {
       
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 space-y-8">
         
-        {/* SECTION 1: DETAIL EVENT (SAMA SEPERTI SEBELUMNYA) */}
+        {/* SECTION 1: DETAIL EVENT */}
         <section className="space-y-4">
           <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b pb-2">Detail Acara</h3>
           
@@ -170,7 +226,7 @@ export default function CreateEventPage() {
           <FileInput label="Upload Poster Event (Wajib)" accept="image/*" onChange={handleFileChange} required />
         </section>
 
-        {/* SECTION 2: VARIASI TIKET (FITUR BARU) */}
+        {/* SECTION 2: VARIASI TIKET */}
         <section className="space-y-4">
           <div className="flex justify-between items-center border-b pb-2">
             <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider">Variasi Tiket</h3>
@@ -217,7 +273,7 @@ export default function CreateEventPage() {
                   />
                 </div>
 
-                {/* Tombol Hapus (Hanya muncul jika tiket > 1) */}
+                {/* Tombol Hapus */}
                 {tickets.length > 1 && (
                   <button 
                     type="button" 
@@ -242,6 +298,14 @@ export default function CreateEventPage() {
         </div>
 
       </form>
+
+      {/* 3. Render Modal */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={handleCloseModal} // Menggunakan handler khusus
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </div>
   );
 }
