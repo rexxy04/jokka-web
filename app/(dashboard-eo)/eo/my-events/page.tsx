@@ -4,8 +4,6 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import Button from '@/components/ui/Button';
-// Import Service
 import { getMyEvents } from '@/lib/services/eo';
 
 export default function MyEventsPage() {
@@ -23,109 +21,112 @@ export default function MyEventsPage() {
     return () => unsubscribe();
   }, []);
 
-  // Helper untuk Warna Status
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'published':
-        return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">Tayang</span>;
+        return <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Tayang</span>;
       case 'pending_review':
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold border border-yellow-200">Menunggu Review</span>;
+        return <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Review</span>;
       case 'rejected':
-        return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200">Ditolak</span>;
+        return <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Ditolak</span>;
       default:
-        return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">Draft</span>;
+        return <span className="bg-gray-500/10 text-gray-400 border border-gray-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Draft</span>;
     }
   };
 
-  // Helper Format Rupiah
   const formatPrice = (price: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Event Saya 📅</h1>
-          <p className="text-gray-500 mt-1">Kelola semua event yang Anda selenggarakan.</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Event Saya</h1>
+          <p className="text-gray-400 text-sm">Kelola semua event yang Anda selenggarakan.</p>
         </div>
         <div>
-          <Button href="/eo/my-events/create" variant="primary" className="shadow-lg hover:shadow-indigo-500/30">
-            + Buat Event Baru
-          </Button>
+          <Link 
+            href="/eo/my-events/create" 
+            className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-purple-500/20 transition-all transform hover:scale-105"
+          >
+            <span>+</span> Buat Event Baru
+          </Link>
         </div>
       </div>
 
       {/* CONTENT */}
       {loading ? (
-        <div className="p-12 text-center text-gray-500 bg-white rounded-xl border border-gray-100">
+        <div className="p-12 text-center text-gray-500 bg-[#151923] rounded-2xl border border-gray-800/50 animate-pulse">
           <p>Sedang memuat data event...</p>
         </div>
       ) : events.length === 0 ? (
-        // STATE KOSONG
-        <div className="bg-white p-12 rounded-xl border border-gray-100 text-center shadow-sm">
-          <div className="text-6xl mb-4">🎫</div>
-          <h3 className="text-lg font-bold text-gray-900">Belum ada Event</h3>
-          <p className="text-gray-500 mb-6">Anda belum membuat event apapun. Mulai buat sekarang!</p>
-          <Button href="/eo/my-events/create" variant="outline">
-            Buat Event Pertama
-          </Button>
+        <div className="bg-[#151923] p-12 rounded-2xl border border-gray-800/50 text-center shadow-lg">
+          <div className="text-6xl mb-4 opacity-50">🎫</div>
+          <h3 className="text-xl font-bold text-white">Belum ada Event</h3>
+          <p className="text-gray-400 mb-6 mt-2 text-sm">Mulai buat event pertamamu dan raih audiens!</p>
+          <Link href="/eo/my-events/create" className="text-indigo-400 hover:text-indigo-300 font-medium underline">
+            Buat Event Sekarang
+          </Link>
         </div>
       ) : (
-        // TABEL DATA
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-[#151923] rounded-2xl border border-gray-800/50 overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="w-full text-left">
+              <thead className="bg-[#1A1F2E] text-gray-400 text-xs uppercase font-semibold tracking-wider">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal & Lokasi</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tiket</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                  <th className="px-6 py-4">Event</th>
+                  <th className="px-6 py-4">Tanggal & Lokasi</th>
+                  <th className="px-6 py-4">Tiket</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4 text-center">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-800/50">
                 {events.map((event) => (
-                  <tr key={event.id} className="hover:bg-gray-50 transition">
+                  <tr key={event.id} className="hover:bg-[#1E2230] transition duration-200">
                     
-                    {/* Kolom 1: Gambar & Judul */}
+                    {/* Kolom 1: Event */}
                     <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="h-12 w-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                          <img className="h-12 w-12 object-cover" src={event.poster} alt="" />
+                      <div className="flex items-center gap-4">
+                        <div className="h-14 w-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700 border border-gray-600">
+                          <img className="h-full w-full object-cover" src={event.poster} alt="" />
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-bold text-gray-900 line-clamp-1">{event.title}</div>
-                          <div className="text-xs text-gray-500">{event.category}</div>
+                        <div>
+                          <div className="text-sm font-bold text-white line-clamp-1 mb-1">{event.title}</div>
+                          <div className="text-xs text-indigo-400 font-medium uppercase tracking-wide">{event.category}</div>
                         </div>
                       </div>
                     </td>
 
                     {/* Kolom 2: Tanggal */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{new Date(event.startDate).toLocaleDateString('id-ID')}</div>
-                      <div className="text-xs text-gray-500">{event.locationName}</div>
+                      <div className="text-sm text-gray-300">{new Date(event.startDate).toLocaleDateString('id-ID')}</div>
+                      <div className="text-xs text-gray-500 mt-1 max-w-[150px] truncate">{event.locationName}</div>
                     </td>
 
                     {/* Kolom 3: Tiket */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
+                      <div className="text-sm text-white font-mono">
                         {event.tickets && event.tickets[0] ? formatPrice(event.tickets[0].price) : "Gratis"}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Terjual: <span className="font-bold text-indigo-600">{event.tickets?.[0]?.sold || 0}</span> / {event.tickets?.[0]?.stock}
+                      <div className="text-xs text-gray-500 mt-1">
+                        Terjual: <span className="text-green-400 font-bold">{event.tickets?.[0]?.sold || 0}</span> / {event.tickets?.[0]?.stock}
                       </div>
                     </td>
 
                     {/* Kolom 4: Status */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
                       {getStatusBadge(event.status)}
                     </td>
 
                     {/* Kolom 5: Aksi */}
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Link href={`/event/${event.id}`} className="text-indigo-600 hover:text-indigo-900 hover:underline">
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <Link 
+                        href={`/event/${event.id}`} 
+                        target="_blank"
+                        className="text-indigo-400 hover:text-white font-medium text-sm transition hover:underline"
+                      >
                         Lihat
                       </Link>
                     </td>
