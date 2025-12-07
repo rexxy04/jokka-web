@@ -1,4 +1,4 @@
-// components/StatusModal.tsx
+// components/ui/StatusModal.tsx
 import React from 'react';
 
 interface StatusModalProps {
@@ -6,7 +6,7 @@ interface StatusModalProps {
   onClose: () => void;
   title: string;
   message: string;
-  type?: 'success' | 'error'; // Opsional: persiapan jika nanti butuh modal error
+  type?: 'success' | 'error'; // Opsional, default 'success'
 }
 
 const StatusModal: React.FC<StatusModalProps> = ({ 
@@ -19,9 +19,9 @@ const StatusModal: React.FC<StatusModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       {/* Modal Card */}
-      <div className="relative w-full max-w-sm transform overflow-hidden rounded-2xl bg-white p-6 text-center shadow-xl transition-all animate-in fade-in zoom-in duration-200">
+      <div className="relative w-full max-w-sm transform overflow-hidden rounded-2xl bg-white p-6 text-center shadow-xl transition-all">
         
         {/* Tombol Close (X) */}
         <button
@@ -40,9 +40,12 @@ const StatusModal: React.FC<StatusModalProps> = ({
           </svg>
         </button>
 
-        {/* Icon Bagian Tengah */}
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+        {/* Icon Bagian Tengah (Dinamis: Hijau/Merah) */}
+        <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
+          type === 'success' ? 'bg-green-100' : 'bg-red-100'
+        }`}>
             {type === 'success' ? (
+                 // Icon Checklist (Hijau)
                  <svg
                  className="h-10 w-10 text-green-500"
                  fill="none"
@@ -53,9 +56,9 @@ const StatusModal: React.FC<StatusModalProps> = ({
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
                </svg>
             ) : (
-                // Placeholder icon untuk error (jika nanti type='error' dipakai)
-                <svg className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                // Icon Silang X (Merah)
+                <svg className="h-10 w-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
             )}
         </div>

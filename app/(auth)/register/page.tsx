@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import AuthCard from '@/components/public/AuthCard';
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
-// 1. Update Import: Tambahkan loginWithGoogle
 import { registerUserService, loginWithGoogle } from '@/lib/services/auth';
+// 1. Pastikan StatusModal yang diimport adalah versi terbaru (yang ada props type)
 import StatusModal from '@/components/ui/StatusModal';
 
 export default function RegisterPage() {
@@ -25,7 +25,12 @@ export default function RegisterPage() {
 
   // State Modal
   const [showModal, setShowModal] = useState(false);
-  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  // 2. UPDATE STATE: Tambahkan field 'type'
+  const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ 
+    title: '', 
+    message: '', 
+    type: 'success' 
+  });
   const [isSuccess, setIsSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,9 +42,11 @@ export default function RegisterPage() {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
+      // 3. SET TYPE 'ERROR' SAAT GAGAL
       setModalContent({
         title: "Password Tidak Cocok",
-        message: "Pastikan password dan konfirmasi password Anda sama."
+        message: "Pastikan password dan konfirmasi password Anda sama.",
+        type: 'error'
       });
       setIsSuccess(false);
       setShowModal(true);
@@ -51,17 +58,21 @@ export default function RegisterPage() {
     try {
       await registerUserService(formData);
 
+      // 4. SET TYPE 'SUCCESS' SAAT BERHASIL
       setModalContent({
         title: "Pendaftaran Berhasil! 🎉",
-        message: "Akun Anda telah dibuat. Silakan cek email Anda untuk verifikasi sebelum login."
+        message: "Akun Anda telah dibuat. Silakan cek email Anda untuk verifikasi sebelum login.",
+        type: 'success'
       });
       setIsSuccess(true); 
       setShowModal(true);
 
     } catch (error: any) {
+      // 5. SET TYPE 'ERROR' SAAT GAGAL
       setModalContent({
         title: "Gagal Mendaftar",
-        message: error.message || "Terjadi kesalahan saat mendaftarkan akun."
+        message: error.message || "Terjadi kesalahan saat mendaftarkan akun.",
+        type: 'error'
       });
       setIsSuccess(false);
       setShowModal(true);
@@ -70,21 +81,21 @@ export default function RegisterPage() {
     }
   };
 
-  // --- LOGIC DAFTAR DENGAN GOOGLE (BARU) ---
+  // --- LOGIC DAFTAR DENGAN GOOGLE ---
   const handleGoogleRegister = async () => {
     try {
-      // Panggil service Google Login (otomatis register jika belum ada akun)
       const result = await loginWithGoogle();
       
-      // Jika berhasil, redirect sesuai role (biasanya ke home untuk user baru)
       if (result.role === 'admin') router.push('/admin/dashboard');
       else if (result.role === 'eo') router.push('/eo/dashboard');
       else router.push('/');
       
     } catch (error: any) {
+      // 6. SET TYPE 'ERROR' SAAT GAGAL
       setModalContent({ 
         title: "Gagal Mendaftar", 
-        message: "Terjadi kesalahan saat mencoba mendaftar dengan Google." 
+        message: "Terjadi kesalahan saat mencoba mendaftar dengan Google.",
+        type: 'error'
       });
       setIsSuccess(false);
       setShowModal(true);
@@ -154,11 +165,11 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Tombol Google (SUDAH DIUPDATE) */}
+        {/* Tombol Google */}
         <div>
           <Button 
-            type="button" // Penting: type button
-            onClick={handleGoogleRegister} // Pasang Handler di sini
+            type="button" 
+            onClick={handleGoogleRegister} 
             variant="outline" 
             className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 flex items-center justify-center"
           >
@@ -188,12 +199,13 @@ export default function RegisterPage() {
         </div>
       </form>
 
-      {/* Render Modal */}
+      {/* 7. PASS PROPS TYPE KE MODAL */}
       <StatusModal 
         isOpen={showModal} 
         onClose={handleCloseModal} 
         title={modalContent.title}
         message={modalContent.message}
+        type={modalContent.type} // <-- Penting agar icon berubah
       />
     </AuthCard>
   );
