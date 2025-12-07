@@ -10,10 +10,13 @@ import {
   reauthenticateWithCredential, 
   updatePassword, 
   sendPasswordResetEmail,
-  User
+  User,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
 
 // ==========================================
 // 1. SERVICE LOGIN (Smart Login Logic - DYNAMIC)
@@ -216,5 +219,51 @@ export const updateUserProfileImage = async (user: any, file: File) => {
   } catch (error: any) {
     console.error("Error updating profile image:", error);
     throw new Error("Gagal mengupload foto profil.");
+  }
+};
+
+/**
+ * FUNGSI BARU: LOGIN WITH GOOGLE
+ * Menangani login & register sekaligus via Google
+ */
+export const loginWithGoogle = async () => {
+  try {
+    const provider = new GoogleAuthProvider();
+    
+    // 1. Munculkan Popup Google
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    // 2. Cek apakah user ini sudah punya data di Firestore?
+    const docRef = doc(db, "users", user.uid);
+    const docSnap = await getDoc(docRef);
+
+    let role = 'user'; // Default role
+
+    if (!docSnap.exists()) {
+      // 3. JIKA USER BARU: Buat dokumen di Firestore
+      await setDoc(docRef, {
+        uid: user.uid,
+        fullname: user.displayName || "User Google",
+        username: user.email?.split('@')[0] || "user", // Generate username dari email
+        email: user.email,
+        role: 'user', // Default jadi user biasa
+        createdAt: new Date().toISOString(),
+        photoURL: user.photoURL || "",
+        phone: "",
+        status: 'verified' // Google user otomatis verified
+      });
+    } else {
+      // 4. JIKA USER LAMA: Ambil role yang sudah ada
+      const data = docSnap.data();
+      role = data.role;
+    }
+
+    // Kembalikan data user & role untuk redirect di frontend
+    return { user, role };
+
+  } catch (error: any) {
+    console.error("Google Login Error:", error);
+    throw new Error("Gagal login dengan Google. Coba lagi.");
   }
 };
