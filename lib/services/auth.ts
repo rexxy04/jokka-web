@@ -1,4 +1,5 @@
 import { auth, db } from '@/lib/firebase';
+import { storage } from '@/lib/firebase';
 import { 
   signInWithEmailAndPassword, 
   signOut,
@@ -12,6 +13,7 @@ import {
   User
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ==========================================
 // 1. SERVICE LOGIN (Smart Login Logic - DYNAMIC)
@@ -185,5 +187,34 @@ export const sendResetPasswordLink = async (email: string) => {
     return { success: true };
   } catch (error: any) {
     throw new Error("Gagal mengirim link reset password.");
+  }
+};
+
+
+// 7. UPLOAD PROFILE PICTURE
+export const updateUserProfileImage = async (user: any, file: File) => {
+  try {
+    // 1. Upload Foto ke Storage
+    // Path: profile_images/{uid} (Kita timpa file lama biar hemat storage)
+    const storageRef = ref(storage, `profile_images/${user.uid}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const photoURL = await getDownloadURL(snapshot.ref);
+
+    // 2. Update Profile Auth (Biar muncul di Navbar/Profile)
+    await updateProfile(user, {
+      photoURL: photoURL
+    });
+
+    // 3. Update juga di Firestore 'users' (Opsional, buat backup data)
+    const userRef = doc(db, "users", user.uid);
+    await updateDoc(userRef, {
+      photoURL: photoURL
+    });
+
+    return { success: true, photoURL };
+
+  } catch (error: any) {
+    console.error("Error updating profile image:", error);
+    throw new Error("Gagal mengupload foto profil.");
   }
 };

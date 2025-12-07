@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -11,12 +11,17 @@ import { doc, getDoc } from 'firebase/firestore';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/input';
 import Card from '@/components/ui/card';
-import Modal from '@/components/ui/Modal'; // Pastikan komponen Modal sudah ada
+import Modal from '@/components/ui/Modal';
 
 // Services
 import { getUserTransactions, Transaction } from '@/lib/services/transaction';
 import { getUserWishlist, WishlistItem } from '@/lib/services/wishlist';
-import { updateUserData, changeUserPassword, sendResetPasswordLink } from '@/lib/services/auth';
+import { 
+  updateUserData, 
+  changeUserPassword, 
+  sendResetPasswordLink,
+  updateUserProfileImage // <--- Import Service Baru
+} from '@/lib/services/auth';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -29,7 +34,11 @@ export default function ProfilePage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [loadingSaveProfile, setLoadingSaveProfile] = useState(false);
 
-  // Data Password (Modal)
+  // Upload Foto
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Data Password
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passForm, setPassForm] = useState({ current: '', new: '', confirm: '' });
   const [loadingPass, setLoadingPass] = useState(false);
@@ -43,20 +52,17 @@ export default function ProfilePage() {
       if (currentUser) {
         setUser(currentUser);
         
-        // 1. Data User
         const docRef = doc(db, "users", currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           setUserDataFirestore(data);
-          setPhoneInput(data.phone || ''); // Set initial value untuk edit
+          setPhoneInput(data.phone || ''); 
         }
 
-        // 2. Data Tiket
         const myTickets = await getUserTransactions(currentUser.uid);
         setTickets(myTickets);
 
-        // 3. Data Wishlist
         const myWishlist = await getUserWishlist(currentUser.uid);
         setWishlist(myWishlist);
         
@@ -79,6 +85,39 @@ export default function ProfilePage() {
     if (status === 'settlement' || status === 'capture') return 'bg-green-100 text-green-700 border-green-200';
     if (status === 'pending') return 'bg-yellow-100 text-yellow-700 border-yellow-200';
     return 'bg-red-100 text-red-700 border-red-200';
+  };
+
+  // --- LOGIC GANTI FOTO ---
+  const handlePhotoClick = () => {
+    // Trigger klik pada input file yang tersembunyi
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Validasi ukuran (Max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Ukuran foto terlalu besar! Maksimal 2MB.");
+        return;
+      }
+
+      setUploadingPhoto(true);
+      try {
+        // Panggil Service Upload
+        const res = await updateUserProfileImage(user, file);
+        alert("Foto profil berhasil diperbarui! 📸");
+        
+        // Update state lokal biar langsung berubah
+        setUser({ ...user, photoURL: res.photoURL });
+        
+      } catch (error: any) {
+        alert(error.message);
+      } finally {
+        setUploadingPhoto(false);
+      }
+    }
   };
 
   // --- LOGIC SIMPAN PROFIL ---
@@ -115,7 +154,6 @@ export default function ProfilePage() {
     }
   };
 
-  // --- LOGIC LUPA PASSWORD ---
   const handleForgotPassword = async () => {
     if (!user?.email) return;
     try {
@@ -138,15 +176,36 @@ export default function ProfilePage() {
           {/* KOLOM KIRI */}
           <div className="md:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <div className="w-32 h-32 mx-auto bg-gray-200 rounded-full flex items-center justify-center text-4xl mb-4 text-gray-400 font-bold overflow-hidden relative group">
-                {/* Placeholder Avatar */}
-                <span className="group-hover:hidden">
-                  {user?.displayName?.charAt(0).toUpperCase() || "U"}
-                </span>
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer text-white text-xs">
-                  Ganti Foto
+              
+              {/* --- BAGIAN FOTO PROFIL --- */}
+              <div 
+                onClick={handlePhotoClick}
+                className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-4 overflow-hidden relative group cursor-pointer border-4 ${uploadingPhoto ? 'border-blue-400 animate-pulse' : 'border-gray-100'}`}
+              >
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="Profil" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 flex items-center justify-center text-4xl font-bold text-gray-400">
+                    {user?.displayName?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                )}
+                
+                {/* Overlay Hover */}
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white text-xs font-medium">
+                  {uploadingPhoto ? "Uploading..." : "Ganti Foto"}
                 </div>
               </div>
+
+              {/* Input File Tersembunyi */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                className="hidden" 
+              />
+              {/* --------------------------- */}
+
               <h2 className="text-xl font-bold text-gray-900">{user?.displayName}</h2>
               <p className="text-sm text-gray-500">{user?.email}</p>
             </div>
@@ -164,7 +223,7 @@ export default function ProfilePage() {
           {/* KOLOM KANAN */}
           <div className="md:col-span-2 space-y-8">
             
-            {/* DATA AKUN (EDITABLE) */}
+            {/* DATA AKUN */}
             <section className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold text-gray-900">Data Akun</h3>
@@ -246,7 +305,7 @@ export default function ProfilePage() {
 
               {wishlist.length === 0 ? (
                 <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
-                  Belum ada item disimpan.
+                  Belum ada item disimpan. Yuk cari tempat seru!
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
