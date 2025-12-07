@@ -7,6 +7,10 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { getEOStats } from '@/lib/services/eo';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 
+// 1. Import Service & Component Baru
+import { getEOSalesStats } from '@/lib/services/transaction';
+import SalesChart from '@/components/eo/SalesChart';
+
 export default function EODashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -16,26 +20,49 @@ export default function EODashboard() {
     pendingEvents: 0
   });
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  
+  // 2. State Data Grafik
+  const [chartData, setChartData] = useState<any[]>([]);
 
-  useEffect(() => {
+ useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // 1. Fetch Statistik
-        const data = await getEOStats(user.uid);
-        setStats(data);
+        try {
+            // A. Fetch Statistik Utama (Cards)
+            const data = await getEOStats(user.uid);
+            // Jangan setStats dulu di sini, kita akan gabungkan nanti
+            
+            // B. Fetch Data Grafik Penjualan (Chart) -> INI SUMBER KEBENARAN (Source of Truth)
+            const salesData = await getEOSalesStats(user.uid);
+            setChartData(salesData);
 
-        // 2. Fetch Recent Events (Untuk Tabel Bawah)
-        const qEvents = query(
-            collection(db, "events"), 
-            where("organizerId", "==", user.uid),
-            orderBy("createdAt", "desc"),
-            limit(3)
-        );
-        const eventsSnap = await getDocs(qEvents);
-        const recents = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setRecentEvents(recents);
+            // --- PERBAIKAN DI SINI ---
+            // Hitung total pendapatan dari data grafik (Transaksi Asli)
+            const realRevenue = salesData.reduce((acc, curr) => acc + curr.total, 0);
 
-        setLoading(false);
+            // Update stats, tapi TINDIH nilai totalRevenue dengan realRevenue
+            setStats({
+                ...data, // Data lain (total event, tiket terjual) tetap dari getEOStats
+                totalRevenue: realRevenue // Total uang pakai data dari transaksi
+            });
+            // -------------------------
+
+            // C. Fetch Recent Events
+            const qEvents = query(
+                collection(db, "events"), 
+                where("eoId", "==", user.uid), // Pastikan ini eoId atau organizerId sesuai DB
+                orderBy("createdAt", "desc"),
+                limit(3)
+            );
+            const eventsSnap = await getDocs(qEvents);
+            const recents = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setRecentEvents(recents);
+
+        } catch (error) {
+            console.error("Error loading dashboard:", error);
+        } finally {
+            setLoading(false);
+        }
       }
     });
     return () => unsubscribe();
@@ -55,7 +82,7 @@ export default function EODashboard() {
           <p className="text-gray-400 text-sm">Berikut adalah performa penjualan tiket Anda.</p>
         </div>
         
-        {/* Tombol Buat Event Baru (Ungu Neon) */}
+        {/* Tombol Buat Event Baru */}
         <Link 
             href="/eo/my-events/create" 
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-500/20 transition-all transform hover:scale-105"
@@ -113,16 +140,24 @@ export default function EODashboard() {
 
       </div>
 
-      {/* --- GRAFIK PLACEHOLDER --- */}
-      <div className="bg-[#151923] rounded-3xl border border-gray-800/50 h-80 flex flex-col items-center justify-center relative overflow-hidden">
-        {/* Hiasan Background Glow */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-purple-500/5 pointer-events-none"></div>
-        
-        <div className="w-16 h-16 bg-indigo-600/20 rounded-2xl flex items-center justify-center mb-4 text-indigo-400 text-2xl">
-            📊
+      {/* --- GRAFIK PENJUALAN (SUDAH DIUPDATE) --- */}
+      <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800 shadow-sm relative overflow-hidden">
+        <div className="flex justify-between items-center mb-2">
+           <h3 className="text-lg font-bold text-white">Grafik Penjualan Bulanan</h3>
+           <div className="bg-[#1E2230] p-1 rounded-lg flex text-xs">
+              <span className="px-3 py-1 bg-indigo-600 text-white rounded-md">2025</span>
+           </div>
         </div>
-        <h3 className="text-white font-bold text-lg">Grafik Penjualan Bulanan</h3>
-        <p className="text-gray-500 text-sm mt-2">Data visual akan tersedia di sini (Coming Soon)</p>
+        <p className="text-gray-500 text-xs mb-6">Visualisasi pendapatan tiket bersih.</p>
+        
+        {/* AREA GRAFIK */}
+        {loading ? (
+           <div className="h-[300px] w-full flex items-center justify-center text-gray-500 animate-pulse">
+              Memuat Data Grafik...
+           </div>
+        ) : (
+           <SalesChart data={chartData} />
+        )}
       </div>
 
       {/* --- TABEL AKTIVITAS TERBARU --- */}
@@ -150,7 +185,7 @@ export default function EODashboard() {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-lg bg-gray-700 overflow-hidden">
-                                                <img src={evt.poster} alt="" className="w-full h-full object-cover" />
+                                                <img src={evt.posterUrl || evt.poster} alt="" className="w-full h-full object-cover" />
                                             </div>
                                             <div>
                                                 <p className="text-white font-medium text-sm line-clamp-1">{evt.title}</p>
@@ -159,11 +194,11 @@ export default function EODashboard() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        {evt.status === 'published' ? (
+                                        {evt.status === 'published' || evt.status === 'approved' ? (
                                             <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">
                                                 Tayang
                                             </span>
-                                        ) : evt.status === 'pending_review' ? (
+                                        ) : evt.status === 'pending_review' || evt.status === 'pending' ? (
                                             <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">
                                                 Review
                                             </span>
