@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/services/auth';
-// HAPUS IMPORT SidebarItem DARI SINI
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function EOLayout({
   children,
@@ -17,7 +18,12 @@ export default function EOLayout({
   const [authorized, setAuthorized] = useState(false);
   const [user, setUser] = useState<any>(null);
 
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+
   const handleLogout = async () => {
+    // Kita biarkan confirm bawaan browser untuk logout agar ada opsi Yes/No
     if (confirm("Yakin ingin keluar dari sesi EO?")) {
         await signOut(auth);
         router.push('/login');
@@ -34,22 +40,45 @@ export default function EOLayout({
           setAuthorized(true);
           setUser(currentUser);
         } else {
-          alert("Halaman ini khusus Partner EO.");
-          router.push('/');
+          // 🔴 KODE LAMA (DIHAPUS):
+          // alert("Halaman ini khusus Partner EO.");
+          // router.push('/');
+
+          // 🟢 KODE BARU (PAKAI MODAL):
+          // Kita tampilkan modal, redirect dilakukan saat modal ditutup (lihat logic render di bawah)
+          setModalContent({
+            title: "Akses Ditolak",
+            message: "Akun Anda tidak memiliki izin untuk mengakses Dashboard EO."
+          });
+          setShowModal(true);
         }
       }
     });
     return () => unsubscribe();
   }, [router]);
 
+  // JIKA BELUM AUTHORIZED (Loading atau Akses Ditolak)
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0F111A] text-white">
         <p className="text-gray-400 animate-pulse">Memuat Dashboard EO...</p>
+        
+        {/* 3. Render Modal di sini agar muncul saat akses ditolak */}
+        <StatusModal 
+            isOpen={showModal}
+            title={modalContent.title}
+            message={modalContent.message}
+            onClose={() => {
+                setShowModal(false);
+                // Redirect ke Home hanya jika modal ditutup saat state belum authorized
+                router.push('/'); 
+            }}
+        />
       </div>
     );
   }
 
+  // JIKA AUTHORIZED (Tampilkan Layout Utama)
   return (
     <div className="min-h-screen flex bg-[#0F111A] font-sans text-gray-200">
       
@@ -106,12 +135,19 @@ export default function EOLayout({
           {children}
         </div>
       </main>
+
+      {/* 4. Pasang Modal juga di sini (jaga-jaga untuk penggunaan lain di masa depan) */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)}
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </div>
   );
 }
 
 // --- KOMPONEN LOKAL SIDEBAR ITEM (CUSTOM DARK MODE) ---
-// Ini yang dipakai, jadi import di atas harus dihapus
 const SidebarItem = ({ href, icon, label }: { href: string; icon: string; label: string }) => {
     const getIcon = (name: string) => {
         if (name === 'dashboard') return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
