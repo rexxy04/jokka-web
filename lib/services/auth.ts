@@ -4,9 +4,14 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   sendEmailVerification,
-  updateProfile
+  updateProfile,
+  EmailAuthProvider, 
+  reauthenticateWithCredential, 
+  updatePassword, 
+  sendPasswordResetEmail,
+  User
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 // ==========================================
 // 1. SERVICE LOGIN (Smart Login Logic - DYNAMIC)
@@ -129,5 +134,56 @@ export const getUserProfile = async (uid: string) => {
   } catch (error) {
     console.error("Error fetching profile:", error);
     return null;
+  }
+};
+
+
+// ==========================================
+// 4. UPDATE USER PROFILE
+// ==========================================
+
+export const updateUserData = async (uid: string, data: { phone: string }) => {
+  try {
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, {
+      phone: data.phone
+    });
+    return { success: true };
+  } catch (error: any) {
+    throw new Error("Gagal mengupdate profil.");
+  }
+};
+
+// 5. GANTI PASSWORD (Dengan Re-autentikasi)
+export const changeUserPassword = async (user: User, currentPass: string, newPass: string) => {
+  try {
+    if (!user.email) throw new Error("Email tidak valid");
+
+    // A. Re-autentikasi (Cek password lama dulu)
+    const credential = EmailAuthProvider.credential(user.email, currentPass);
+    await reauthenticateWithCredential(user, credential);
+
+    // B. Update Password
+    await updatePassword(user, newPass);
+    
+    return { success: true };
+  } catch (error: any) {
+    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      throw new Error("Password saat ini salah.");
+    }
+    if (error.code === 'auth/weak-password') {
+      throw new Error("Password baru terlalu lemah (min. 6 karakter).");
+    }
+    throw new Error("Gagal mengganti password. Coba login ulang.");
+  }
+};
+
+// 6. RESET PASSWORD (Lupa Password)
+export const sendResetPasswordLink = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true };
+  } catch (error: any) {
+    throw new Error("Gagal mengirim link reset password.");
   }
 };
