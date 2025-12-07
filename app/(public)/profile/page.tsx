@@ -11,7 +11,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/input';
 import Card from '@/components/ui/card';
-import Modal from '@/components/ui/Modal';
+import Modal from '@/components/ui/Modal'; // Modal bawaan untuk form ganti password
+import StatusModal from '@/components/ui/StatusModal'; // 1. Import StatusModal untuk notifikasi
 
 // Services
 import { getUserTransactions, Transaction } from '@/lib/services/transaction';
@@ -20,7 +21,7 @@ import {
   updateUserData, 
   changeUserPassword, 
   sendResetPasswordLink,
-  updateUserProfileImage // <--- Import Service Baru
+  updateUserProfileImage
 } from '@/lib/services/auth';
 
 export default function ProfilePage() {
@@ -46,6 +47,12 @@ export default function ProfilePage() {
   // Data Tiket & Wishlist
   const [tickets, setTickets] = useState<Transaction[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+
+  // 2. State untuk StatusModal & Action Callback
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusModalContent, setStatusModalContent] = useState({ title: '', message: '' });
+  // State khusus untuk menampung fungsi yang dijalankan SETELAH modal ditutup (misal: logout)
+  const [onModalCloseAction, setOnModalCloseAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -75,6 +82,7 @@ export default function ProfilePage() {
   }, [router]);
 
   const handleLogout = async () => {
+    // Kita biarkan confirm bawaan untuk logout agar ada opsi Yes/No
     if (confirm("Yakin ingin keluar?")) {
       await signOut(auth);
       router.push('/');
@@ -89,7 +97,6 @@ export default function ProfilePage() {
 
   // --- LOGIC GANTI FOTO ---
   const handlePhotoClick = () => {
-    // Trigger klik pada input file yang tersembunyi
     fileInputRef.current?.click();
   };
 
@@ -97,23 +104,25 @@ export default function ProfilePage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
-      // Validasi ukuran (Max 2MB)
       if (file.size > 2 * 1024 * 1024) {
-        alert("Ukuran foto terlalu besar! Maksimal 2MB.");
+        setStatusModalContent({ title: "Gagal Upload", message: "Ukuran foto terlalu besar! Maksimal 2MB." });
+        setShowStatusModal(true);
         return;
       }
 
       setUploadingPhoto(true);
       try {
-        // Panggil Service Upload
         const res = await updateUserProfileImage(user, file);
-        alert("Foto profil berhasil diperbarui! 📸");
         
-        // Update state lokal biar langsung berubah
+        // Sukses Ganti Foto
+        setStatusModalContent({ title: "Berhasil! 📸", message: "Foto profil Anda telah diperbarui." });
+        setShowStatusModal(true);
+        
         setUser({ ...user, photoURL: res.photoURL });
         
       } catch (error: any) {
-        alert(error.message);
+        setStatusModalContent({ title: "Gagal Upload", message: error.message });
+        setShowStatusModal(true);
       } finally {
         setUploadingPhoto(false);
       }
@@ -126,11 +135,15 @@ export default function ProfilePage() {
     setLoadingSaveProfile(true);
     try {
       await updateUserData(user.uid, { phone: phoneInput });
-      alert("Nomor HP berhasil diperbarui! ✅");
+      
+      setStatusModalContent({ title: "Data Disimpan ✅", message: "Informasi profil berhasil diperbarui." });
+      setShowStatusModal(true);
+
       setIsEditingProfile(false);
       setUserDataFirestore({ ...userDataFirestore, phone: phoneInput });
     } catch (error: any) {
-      alert(error.message);
+      setStatusModalContent({ title: "Gagal Menyimpan", message: error.message });
+      setShowStatusModal(true);
     } finally {
       setLoadingSaveProfile(false);
     }
@@ -139,16 +152,36 @@ export default function ProfilePage() {
   // --- LOGIC GANTI PASSWORD ---
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passForm.new !== passForm.confirm) return alert("Konfirmasi password baru tidak cocok!");
+    if (passForm.new !== passForm.confirm) {
+        setStatusModalContent({ title: "Validasi Gagal", message: "Konfirmasi password baru tidak cocok!" });
+        setShowStatusModal(true);
+        return;
+    }
     
     setLoadingPass(true);
     try {
       await changeUserPassword(user, passForm.current, passForm.new);
-      alert("Password berhasil diubah! Silakan login ulang.");
-      await signOut(auth);
-      router.push('/login');
+      
+      // Tutup form modal password dulu
+      setIsPasswordModalOpen(false);
+
+      // Tampilkan Modal Sukses & Siapkan Logout Action
+      setStatusModalContent({ 
+        title: "Password Berubah 🔒", 
+        message: "Password berhasil diubah! Silakan login ulang dengan password baru." 
+      });
+      
+      // Set action agar saat modal ditutup, user dilogout
+      setOnModalCloseAction(() => async () => {
+         await signOut(auth);
+         router.push('/login');
+      });
+      
+      setShowStatusModal(true);
+
     } catch (error: any) {
-      alert(error.message);
+      setStatusModalContent({ title: "Gagal Ganti Password", message: error.message });
+      setShowStatusModal(true);
     } finally {
       setLoadingPass(false);
     }
@@ -158,10 +191,25 @@ export default function ProfilePage() {
     if (!user?.email) return;
     try {
       await sendResetPasswordLink(user.email);
-      alert(`Link reset password telah dikirim ke ${user.email}.`);
+      setStatusModalContent({ 
+        title: "Email Terkirim 📧", 
+        message: `Link reset password telah dikirim ke ${user.email}. Silakan cek inbox/spam Anda.` 
+      });
+      setShowStatusModal(true);
     } catch (error: any) {
-      alert("Gagal mengirim email reset.");
+      setStatusModalContent({ title: "Gagal", message: "Gagal mengirim email reset password." });
+      setShowStatusModal(true);
     }
+  };
+
+  // Handler Tutup Status Modal
+  const handleCloseStatusModal = () => {
+      setShowStatusModal(false);
+      // Jika ada action tertunda (seperti logout), jalankan sekarang
+      if (onModalCloseAction) {
+          onModalCloseAction();
+          setOnModalCloseAction(null); // Reset
+      }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Memuat profil...</div>;
@@ -326,7 +374,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* MODAL GANTI PASSWORD */}
+      {/* MODAL FORM GANTI PASSWORD (INPUT) */}
       <Modal 
         isOpen={isPasswordModalOpen} 
         onClose={() => setIsPasswordModalOpen(false)} 
@@ -375,6 +423,14 @@ export default function ProfilePage() {
           </div>
         </form>
       </Modal>
+
+      {/* 3. Render STATUS MODAL (Notifikasi Sukses/Gagal) */}
+      <StatusModal 
+        isOpen={showStatusModal} 
+        onClose={handleCloseStatusModal} 
+        title={statusModalContent.title}
+        message={statusModalContent.message}
+      />
 
     </main>
   );
