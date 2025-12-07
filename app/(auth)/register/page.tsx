@@ -6,16 +6,15 @@ import { useRouter } from 'next/navigation';
 import AuthCard from '@/components/public/AuthCard';
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
-// Import Service Logic
-import { registerUserService } from '@/lib/services/auth';
-// 1. Import StatusModal
+// 1. Update Import: Tambahkan loginWithGoogle
+import { registerUserService, loginWithGoogle } from '@/lib/services/auth';
 import StatusModal from '@/components/ui/StatusModal';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
-  // State untuk menampung input user
+  // State Input
   const [formData, setFormData] = useState({
     fullname: '',
     username: '',
@@ -24,21 +23,19 @@ export default function RegisterPage() {
     confirmPassword: ''
   });
 
-  // 2. State untuk Modal
+  // State Modal
   const [showModal, setShowModal] = useState(false);
   const [modalContent, setModalContent] = useState({ title: '', message: '' });
-  const [isSuccess, setIsSuccess] = useState(false); // Penanda untuk redirect
+  const [isSuccess, setIsSuccess] = useState(false);
 
-  // Handle ketikan user
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Logic saat tombol Daftar diklik
+  // --- LOGIC DAFTAR EMAIL BIASA ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi Password (Ganti alert jadi Modal)
     if (formData.password !== formData.confirmPassword) {
       setModalContent({
         title: "Password Tidak Cocok",
@@ -52,19 +49,16 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Panggil Service Backend
       await registerUserService(formData);
 
-      // Jika sukses (Ganti alert jadi Modal):
       setModalContent({
         title: "Pendaftaran Berhasil! 🎉",
         message: "Akun Anda telah dibuat. Silakan cek email Anda untuk verifikasi sebelum login."
       });
-      setIsSuccess(true); // Set true agar saat modal ditutup user diarahkan ke login
+      setIsSuccess(true); 
       setShowModal(true);
 
     } catch (error: any) {
-      // Jika gagal (Ganti alert jadi Modal):
       setModalContent({
         title: "Gagal Mendaftar",
         message: error.message || "Terjadi kesalahan saat mendaftarkan akun."
@@ -76,11 +70,32 @@ export default function RegisterPage() {
     }
   };
 
+  // --- LOGIC DAFTAR DENGAN GOOGLE (BARU) ---
+  const handleGoogleRegister = async () => {
+    try {
+      // Panggil service Google Login (otomatis register jika belum ada akun)
+      const result = await loginWithGoogle();
+      
+      // Jika berhasil, redirect sesuai role (biasanya ke home untuk user baru)
+      if (result.role === 'admin') router.push('/admin/dashboard');
+      else if (result.role === 'eo') router.push('/eo/dashboard');
+      else router.push('/');
+      
+    } catch (error: any) {
+      setModalContent({ 
+        title: "Gagal Mendaftar", 
+        message: "Terjadi kesalahan saat mencoba mendaftar dengan Google." 
+      });
+      setIsSuccess(false);
+      setShowModal(true);
+    }
+  };
+
   // Handler saat modal ditutup
   const handleCloseModal = () => {
     setShowModal(false);
     if (isSuccess) {
-        router.push('/login'); // Redirect ke login setelah sukses
+        router.push('/login'); 
     }
   };
 
@@ -129,7 +144,7 @@ export default function RegisterPage() {
           </Button>
         </div>
 
-        {/* ... Bagian Google Button (Placeholder) ... */}
+        {/* Pemisah UI */}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-300"></div>
@@ -138,9 +153,17 @@ export default function RegisterPage() {
              <span className="px-2 bg-gray-200/80 text-gray-500">atau</span>
           </div>
         </div>
+
+        {/* Tombol Google (SUDAH DIUPDATE) */}
         <div>
-          <Button type="button" variant="outline" className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50">
-             Daftar dengan Google (Segera)
+          <Button 
+            type="button" // Penting: type button
+            onClick={handleGoogleRegister} // Pasang Handler di sini
+            variant="outline" 
+            className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 flex items-center justify-center"
+          >
+             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.16-7.27 3.46 0 6.64 1.9 8.05 3.36l2.37-2.37C20.25 3.38 16.69 2 12.16 2 6.64 2 2 6.64 2 12s4.64 10 10.16 10c7.47 0 10.65-5.1 10.65-10 0-.93-.14-1.46-.35-2.9z"/></svg>
+             Daftar dengan Google
           </Button>
         </div>
 
@@ -165,10 +188,10 @@ export default function RegisterPage() {
         </div>
       </form>
 
-      {/* 3. Render Modal */}
+      {/* Render Modal */}
       <StatusModal 
         isOpen={showModal} 
-        onClose={handleCloseModal} // Pakai handler khusus untuk redirect
+        onClose={handleCloseModal} 
         title={modalContent.title}
         message={modalContent.message}
       />

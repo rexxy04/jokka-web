@@ -6,9 +6,8 @@ import { useRouter } from 'next/navigation';
 import AuthCard from '@/components/public/AuthCard';
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
-// Import Service Logic
-import { loginService } from '@/lib/services/auth';
-// 1. Import StatusModal
+// 1. Update Import: Tambahkan loginWithGoogle
+import { loginService, loginWithGoogle } from '@/lib/services/auth';
 import StatusModal from '@/components/ui/StatusModal';
 
 export default function LoginPage() {
@@ -21,7 +20,7 @@ export default function LoginPage() {
     password: '',
   });
 
-  // 2. State untuk Modal
+  // State Modal
   const [showModal, setShowModal] = useState(false);
   const [modalContent, setModalContent] = useState({ title: '', message: '' });
 
@@ -29,28 +28,30 @@ export default function LoginPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // --- HELPER REDIRECT (Agar tidak menulis ulang logic yang sama) ---
+  const handleRedirect = (role: string) => {
+    if (role === 'admin') {
+      router.push('/admin/dashboard'); 
+    } else if (role === 'eo') {
+      router.push('/eo/dashboard');
+    } else {
+      router.push('/');
+    }
+  };
+
+  // --- LOGIC LOGIN EMAIL ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 1. Panggil Service Login
       const result = await loginService(formData.email, formData.password);
-      
       console.log("LOGIN RESULT:", result);
       
-      // 2. SMART REDIRECT LOGIC
-      // (Kita tidak perlu modal "Sukses" di login agar user cepat masuk dashboard)
-      if (result.role === 'admin') {
-        router.push('/admin/dashboard'); 
-      } else if (result.role === 'eo') {
-        router.push('/eo/dashboard');
-      } else {
-        router.push('/');
-      }
+      // Redirect sesuai role
+      handleRedirect(result.role);
       
     } catch (error: any) {
-      // 🔴 GANTI alert(error.message) JADI MODAL:
       setModalContent({
         title: "Login Gagal",
         message: error.message || "Periksa kembali email dan password Anda."
@@ -58,6 +59,24 @@ export default function LoginPage() {
       setShowModal(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- LOGIC LOGIN GOOGLE (BARU) ---
+  const handleGoogleLogin = async () => {
+    try {
+      // Panggil service Google Login
+      const result = await loginWithGoogle();
+      
+      // Redirect sesuai role
+      handleRedirect(result.role);
+      
+    } catch (error: any) {
+      setModalContent({ 
+        title: "Gagal Masuk", 
+        message: "Terjadi kesalahan saat mencoba masuk dengan Google. Pastikan popup tidak diblokir." 
+      });
+      setShowModal(true);
     }
   };
 
@@ -121,9 +140,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Tombol Google Placeholder */}
+        {/* Tombol Google (SUDAH DIUPDATE) */}
         <div>
-          <Button variant="outline" type="button" className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50">
+          <Button 
+            variant="outline" 
+            type="button" // Penting: type button agar tidak submit form
+            onClick={handleGoogleLogin} // Pasang Handler di sini
+            className="w-full py-3 bg-white border-gray-300 text-gray-700 hover:bg-gray-50 flex items-center justify-center"
+          >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.16-7.27 3.46 0 6.64 1.9 8.05 3.36l2.37-2.37C20.25 3.38 16.69 2 12.16 2 6.64 2 2 6.64 2 12s4.64 10 10.16 10c7.47 0 10.65-5.1 10.65-10 0-.93-.14-1.46-.35-2.9z"/></svg>
             Masuk dengan Google
           </Button>
@@ -138,7 +162,7 @@ export default function LoginPage() {
         </div>
       </form>
 
-      {/* 3. Render Modal (Untuk menampilkan pesan Error) */}
+      {/* Render Modal Error */}
       <StatusModal 
         isOpen={showModal} 
         onClose={() => setShowModal(false)} 
