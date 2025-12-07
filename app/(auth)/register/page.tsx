@@ -8,6 +8,8 @@ import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
 // Import Service Logic
 import { registerUserService } from '@/lib/services/auth';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -22,6 +24,11 @@ export default function RegisterPage() {
     confirmPassword: ''
   });
 
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  const [isSuccess, setIsSuccess] = useState(false); // Penanda untuk redirect
+
   // Handle ketikan user
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -31,9 +38,14 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi Password
+    // Validasi Password (Ganti alert jadi Modal)
     if (formData.password !== formData.confirmPassword) {
-      alert("Password dan Konfirmasi Password tidak cocok!");
+      setModalContent({
+        title: "Password Tidak Cocok",
+        message: "Pastikan password dan konfirmasi password Anda sama."
+      });
+      setIsSuccess(false);
+      setShowModal(true);
       return;
     }
 
@@ -43,15 +55,32 @@ export default function RegisterPage() {
       // Panggil Service Backend
       await registerUserService(formData);
 
-      // Jika sukses:
-      alert("Pendaftaran Berhasil! Silakan cek email Anda untuk verifikasi sebelum login.");
-      router.push('/login'); // Redirect ke halaman login
+      // Jika sukses (Ganti alert jadi Modal):
+      setModalContent({
+        title: "Pendaftaran Berhasil! 🎉",
+        message: "Akun Anda telah dibuat. Silakan cek email Anda untuk verifikasi sebelum login."
+      });
+      setIsSuccess(true); // Set true agar saat modal ditutup user diarahkan ke login
+      setShowModal(true);
 
     } catch (error: any) {
-      // Jika gagal:
-      alert("Gagal mendaftar: " + error.message);
+      // Jika gagal (Ganti alert jadi Modal):
+      setModalContent({
+        title: "Gagal Mendaftar",
+        message: error.message || "Terjadi kesalahan saat mendaftarkan akun."
+      });
+      setIsSuccess(false);
+      setShowModal(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handler saat modal ditutup
+  const handleCloseModal = () => {
+    setShowModal(false);
+    if (isSuccess) {
+        router.push('/login'); // Redirect ke login setelah sukses
     }
   };
 
@@ -135,6 +164,14 @@ export default function RegisterPage() {
           </div>
         </div>
       </form>
+
+      {/* 3. Render Modal */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={handleCloseModal} // Pakai handler khusus untuk redirect
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </AuthCard>
   );
 }
