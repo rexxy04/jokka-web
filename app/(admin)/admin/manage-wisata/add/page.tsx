@@ -8,6 +8,8 @@ import Input from '@/components/ui/input';
 import FileInput from '@/components/ui/FileInput';
 // Import Service
 import { addPlace, PlaceFormData } from '@/lib/services/admin';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function AddWisataPage() {
   const router = useRouter();
@@ -25,6 +27,11 @@ export default function AddWisataPage() {
 
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  const [isSuccess, setIsSuccess] = useState(false); // Penanda untuk redirect setelah close
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -35,17 +42,49 @@ export default function AddWisataPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imageFile) return alert("Wajib upload foto wisata!");
+    
+    // Validasi Foto (Ganti alert jadi Modal)
+    if (!imageFile) {
+        setModalContent({
+            title: "Foto Diperlukan",
+            message: "Wajib upload foto wisata agar tampilan menarik!"
+        });
+        setIsSuccess(false);
+        setShowModal(true);
+        return;
+    }
 
     setLoading(true);
     try {
       await addPlace(formData, imageFile);
-      alert("Wisata Berhasil Ditambahkan! 🏖️");
-      router.push('/admin/manage-wisata'); // Balik ke tabel
+      
+      // Sukses (Ganti alert jadi Modal)
+      setModalContent({
+        title: "Berhasil Disimpan! 🏖️",
+        message: "Destinasi wisata baru berhasil ditambahkan ke database."
+      });
+      setIsSuccess(true); // Set true agar saat ditutup dia redirect
+      setShowModal(true);
+      
     } catch (error: any) {
-      alert(error.message);
+      // Error (Ganti alert jadi Modal)
+      setModalContent({
+        title: "Gagal Menyimpan",
+        message: error.message || "Terjadi kesalahan saat menyimpan data."
+      });
+      setIsSuccess(false);
+      setShowModal(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handler saat modal ditutup
+  const handleCloseModal = () => {
+    setShowModal(false);
+    // Jika statusnya sukses, baru kita pindah halaman
+    if (isSuccess) {
+        router.push('/admin/manage-wisata');
     }
   };
 
@@ -146,6 +185,14 @@ export default function AddWisataPage() {
 
         </form>
       </div>
+
+      {/* 3. Render Modal */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={handleCloseModal} // Pakai handler khusus
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </div>
   );
 }
