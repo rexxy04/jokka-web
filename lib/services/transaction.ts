@@ -23,9 +23,13 @@ export interface Transaction {
   paymentType: string;
   transactionTime: string;
   createdAt: any;
+  ticketType?: string; // Opsional: Jenis tiket
+  qty?: number;        // Opsional: Jumlah tiket
 }
 
-// 1. Simpan Transaksi Baru & Update Stok Event
+/**
+ * 1. SIMPAN TRANSAKSI BARU & UPDATE STOK
+ */
 export const saveTransaction = async (data: any) => {
   try {
     // A. Simpan data transaksi ke collection 'transactions'
@@ -35,9 +39,8 @@ export const saveTransaction = async (data: any) => {
     });
 
     // B. UPDATE DATA EVENT (Stok & Terjual)
-    // Hanya update jika statusnya SUKSES (settlement/capture) atau PENDING
-    // (Asumsi: Pending sudah booking kuota biar gak direbut orang)
-    if (data.status === 'settlement' || data.status === 'capture' || data.status === 'pending') {
+    // Hanya update jika statusnya SUKSES atau PENDING
+    if (['settlement', 'capture', 'pending'].includes(data.status)) {
       const eventRef = doc(db, "events", data.eventId);
       const eventSnap = await getDoc(eventRef);
 
@@ -45,13 +48,21 @@ export const saveTransaction = async (data: any) => {
         const eventData = eventSnap.data();
         const tickets = eventData.tickets || [];
 
-        // Asumsi: Kita update tiket pertama (Index 0)
-        // Karena form create event kita baru support 1 tipe tiket
         if (tickets.length > 0) {
           const updatedTickets = [...tickets];
-          // Tambah terjual, Kurangi stok
-          updatedTickets[0].sold = (updatedTickets[0].sold || 0) + 1;
-          updatedTickets[0].stock = (updatedTickets[0].stock || 0) - 1;
+          
+          // Cari index tiket yang dibeli berdasarkan Nama Tiket (ticketType)
+          // Jika tidak ketemu, fallback ke index 0
+          const ticketIndex = data.ticketType 
+            ? updatedTickets.findIndex((t: any) => t.name === data.ticketType)
+            : 0;
+
+          const targetIndex = ticketIndex >= 0 ? ticketIndex : 0;
+          const quantity = data.qty || 1;
+
+          // Update Sold & Stock
+          updatedTickets[targetIndex].sold = (updatedTickets[targetIndex].sold || 0) + quantity;
+          updatedTickets[targetIndex].stock = (updatedTickets[targetIndex].stock || 0) - quantity;
 
           await updateDoc(eventRef, {
             tickets: updatedTickets
@@ -67,7 +78,9 @@ export const saveTransaction = async (data: any) => {
   }
 };
 
-// 2. Ambil Transaksi milik User tertentu
+/**
+ * 2. AMBIL TRANSAKSI MILIK USER (History Belanja)
+ */
 export const getUserTransactions = async (userId: string) => {
   try {
     const q = query(
@@ -84,10 +97,12 @@ export const getUserTransactions = async (userId: string) => {
   }
 };
 
-// --- SERVICE: VALIDASI TIKET (CHECK-IN) ---
+/**
+ * 3. VALIDASI TIKET (Check-in Scanner)
+ */
 export const verifyTicket = async (orderId: string, currentEoId: string) => {
   try {
-    // 1. Cari Transaksi berdasarkan Order ID
+    // A. Cari Transaksi berdasarkan Order ID
     const q = query(
       collection(db, 'transactions'),
       where('orderId', '==', orderId)
@@ -101,13 +116,12 @@ export const verifyTicket = async (orderId: string, currentEoId: string) => {
     const ticketDoc = snapshot.docs[0];
     const ticketData = ticketDoc.data();
 
-    // 2. Cek Status Pembayaran
+    // B. Cek Status Pembayaran
     if (ticketData.status !== 'settlement' && ticketData.status !== 'capture') {
       throw new Error(`Tiket belum lunas (Status: ${ticketData.status})`);
     }
 
-    // 3. Cek Kepemilikan Event (Security)
-    // Ambil data event terkait tiket ini untuk cek siapa EO-nya
+    // C. Cek Kepemilikan Event (Security)
     const eventRef = doc(db, "events", ticketData.eventId);
     const eventSnap = await getDoc(eventRef);
     
@@ -116,17 +130,20 @@ export const verifyTicket = async (orderId: string, currentEoId: string) => {
     }
 
     const eventData = eventSnap.data();
-    if (eventData.organizerId !== currentEoId) {
+    
+    // Perbaikan: Gunakan 'eoId' sesuai skema database kita
+    if (eventData.eoId !== currentEoId) { 
       throw new Error("Tiket ini bukan untuk event Anda!");
     }
 
-    // 4. Cek Apakah Sudah Dipakai?
+    // D. Cek Apakah Sudah Dipakai?
     if (ticketData.redeemedAt) {
+      // Convert timestamp firestore ke date string
       const dateUsed = new Date(ticketData.redeemedAt.seconds * 1000).toLocaleString('id-ID');
       throw new Error(`Tiket SUDAH DIPAKAI pada ${dateUsed}`);
     }
 
-    // 5. UPDATE: Tandai tiket sudah dipakai (Check-in)
+    // E. UPDATE: Tandai tiket sudah dipakai (Check-in)
     await updateDoc(doc(db, "transactions", ticketDoc.id), {
       redeemedAt: serverTimestamp()
     });
@@ -136,11 +153,78 @@ export const verifyTicket = async (orderId: string, currentEoId: string) => {
       ticket: {
         eventName: ticketData.eventName,
         buyerId: ticketData.userId,
-        amount: ticketData.amount
+        amount: ticketData.amount,
+        ticketType: ticketData.ticketType || "Regular"
       }
     };
 
   } catch (error: any) {
     throw new Error(error.message || "Gagal memvalidasi tiket.");
+  }
+};
+
+/**
+ * 4. GET EO SALES STATS (Grafik Penjualan Dashboard) [FIXED]
+ */
+export const getEOSalesStats = async (eoId: string) => {
+  try {
+    // A. Ambil semua ID Event milik EO ini
+    const eventsQuery = query(collection(db, "events"), where("eoId", "==", eoId));
+    let eventsSnapshot = await getDocs(eventsQuery);
+
+    // Fallback: Jika kosong, coba cek pakai 'organizerId' (untuk support data lama)
+    if (eventsSnapshot.empty) {
+       const legacyQuery = query(collection(db, "events"), where("organizerId", "==", eoId));
+       // PERBAIKAN DI SINI: Tambahkan 'getDocs(...)'
+       eventsSnapshot = await getDocs(legacyQuery); 
+    }
+    
+    const eoEventIds = eventsSnapshot.docs.map(doc => doc.id);
+
+    if (eoEventIds.length === 0) return []; 
+
+    // B. Ambil Transaksi
+    const transQuery = query(
+      collection(db, "transactions"),
+      where("status", "in", ["settlement", "capture"]),
+      orderBy("transactionTime", "asc")
+    );
+
+    const transSnapshot = await getDocs(transQuery);
+    
+    // Filter manual transaction milik EO ini
+    const eoTransactions = transSnapshot.docs
+      .map(doc => doc.data())
+      .filter((t: any) => eoEventIds.includes(t.eventId));
+
+    // C. Kelompokkan Data per Bulan
+    const monthlyData = [
+      { name: 'Jan', total: 0 }, { name: 'Feb', total: 0 }, { name: 'Mar', total: 0 },
+      { name: 'Apr', total: 0 }, { name: 'Mei', total: 0 }, { name: 'Jun', total: 0 },
+      { name: 'Jul', total: 0 }, { name: 'Agu', total: 0 }, { name: 'Sep', total: 0 },
+      { name: 'Okt', total: 0 }, { name: 'Nov', total: 0 }, { name: 'Des', total: 0 },
+    ];
+
+    eoTransactions.forEach((t: any) => {
+      // Handle Timestamp Firestore atau String
+      let date;
+      if (t.transactionTime?.toDate) {
+        date = t.transactionTime.toDate(); 
+      } else {
+        date = new Date(t.transactionTime); 
+      }
+
+      const monthIndex = date.getMonth(); // 0 = Jan, 11 = Des
+      
+      if (monthIndex >= 0 && monthIndex <= 11) {
+        monthlyData[monthIndex].total += Number(t.amount); 
+      }
+    });
+
+    return monthlyData;
+
+  } catch (error) {
+    console.error("Error fetching sales stats:", error);
+    return [];
   }
 };
