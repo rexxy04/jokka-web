@@ -3,11 +3,13 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import AuthCard from '@/components/public/AuthCard'; // Pastikan path import ini benar sesuai folder component kamu
+import AuthCard from '@/components/public/AuthCard';
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
-// Import Service Logic yang sudah kita buat
+// Import Service Logic
 import { loginService } from '@/lib/services/auth';
+// 1. Import StatusModal
+import StatusModal from '@/components/ui/StatusModal';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,6 +21,10 @@ export default function LoginPage() {
     password: '',
   });
 
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -28,28 +34,28 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. Panggil Service Login (Logic Backend)
-      // Service ini akan mengembalikan object { user, role }
+      // 1. Panggil Service Login
       const result = await loginService(formData.email, formData.password);
       
       console.log("LOGIN RESULT:", result);
+      
       // 2. SMART REDIRECT LOGIC
-      // Arahkan user sesuai Role-nya
+      // (Kita tidak perlu modal "Sukses" di login agar user cepat masuk dashboard)
       if (result.role === 'admin') {
-        // Redirect ke Dashboard Admin (Nanti kita buat halamannya)
         router.push('/admin/dashboard'); 
-        // alert("Login sebagai Admin"); // Debugging sementara kalau halaman belum ada
       } else if (result.role === 'eo') {
-        // Redirect ke Dashboard EO
         router.push('/eo/dashboard');
       } else {
-        // User Biasa -> Ke Homepage
         router.push('/');
       }
       
     } catch (error: any) {
-      // Tampilkan pesan error (Email belum verifikasi / EO Pending / Password Salah)
-      alert(error.message); 
+      // 🔴 GANTI alert(error.message) JADI MODAL:
+      setModalContent({
+        title: "Login Gagal",
+        message: error.message || "Periksa kembali email dan password Anda."
+      });
+      setShowModal(true);
     } finally {
       setLoading(false);
     }
@@ -131,6 +137,14 @@ export default function LoginPage() {
           </Link>
         </div>
       </form>
+
+      {/* 3. Render Modal (Untuk menampilkan pesan Error) */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        title={modalContent.title}
+        message={modalContent.message}
+      />
     </AuthCard>
   );
 }
