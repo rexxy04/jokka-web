@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getMyEvents } from '@/lib/services/eo';
+// Import getEOSalesReport untuk ambil data transaksi mentah
+import { getEOSalesReport } from '@/lib/services/eo'; 
 
 export default function MyEventsPage() {
   const [events, setEvents] = useState<any[]>([]);
@@ -13,9 +15,34 @@ export default function MyEventsPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const data = await getMyEvents(user.uid);
-        setEvents(data);
-        setLoading(false);
+        try {
+            // 1. Ambil Data Event
+            const eventsData = await getMyEvents(user.uid);
+            
+            // 2. Ambil Data Transaksi (Source of Truth)
+            const salesData = await getEOSalesReport(user.uid);
+
+            // 3. Gabungkan Data (Hitung manual terjual berdasarkan transaksi)
+            const processedEvents = eventsData.map((evt) => {
+                // Cari transaksi yang punya eventId == evt.id
+                // Dan statusnya sukses
+                const relatedSales = salesData.filter((s: any) => s.eventId === evt.id);
+                
+                // Hitung total qty tiket
+                const realSold = relatedSales.reduce((acc: number, curr: any) => acc + (curr.qty || 1), 0);
+
+                return {
+                    ...evt,
+                    realSold: realSold // Simpan di property baru 'realSold'
+                };
+            });
+
+            setEvents(processedEvents);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
       }
     });
     return () => unsubscribe();
@@ -24,8 +51,10 @@ export default function MyEventsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'published':
+      case 'approved':
         return <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Tayang</span>;
       case 'pending_review':
+      case 'pending':
         return <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Review</span>;
       case 'rejected':
         return <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Ditolak</span>;
@@ -38,7 +67,6 @@ export default function MyEventsPage() {
 
   return (
     <div className="space-y-8">
-      
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -90,7 +118,11 @@ export default function MyEventsPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <div className="h-14 w-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700 border border-gray-600">
-                          <img className="h-full w-full object-cover" src={event.poster} alt="" />
+                          <img 
+                            className="h-full w-full object-cover" 
+                            src={event.posterUrl || event.poster || '/placeholder-event.jpg'} 
+                            alt="" 
+                          />
                         </div>
                         <div>
                           <div className="text-sm font-bold text-white line-clamp-1 mb-1">{event.title}</div>
@@ -101,7 +133,9 @@ export default function MyEventsPage() {
 
                     {/* Kolom 2: Tanggal */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-300">{new Date(event.startDate).toLocaleDateString('id-ID')}</div>
+                      <div className="text-sm text-gray-300">
+                        {event.startDate ? new Date(event.startDate).toLocaleDateString('id-ID') : '-'}
+                      </div>
                       <div className="text-xs text-gray-500 mt-1 max-w-[150px] truncate">{event.locationName}</div>
                     </td>
 
@@ -111,7 +145,8 @@ export default function MyEventsPage() {
                         {event.tickets && event.tickets[0] ? formatPrice(event.tickets[0].price) : "Gratis"}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        Terjual: <span className="text-green-400 font-bold">{event.tickets?.[0]?.sold || 0}</span> / {event.tickets?.[0]?.stock}
+                        {/* UPDATE: Gunakan 'realSold' yang kita hitung di useEffect */}
+                        Terjual: <span className="text-green-400 font-bold">{event.realSold || 0}</span> / {event.tickets?.[0]?.stock}
                       </div>
                     </td>
 

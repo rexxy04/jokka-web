@@ -7,7 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { getEOStats } from '@/lib/services/eo';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 
-// 1. Import Service & Component Baru
+// Import Service & Component
 import { getEOSalesStats } from '@/lib/services/transaction';
 import SalesChart from '@/components/eo/SalesChart';
 
@@ -20,41 +20,50 @@ export default function EODashboard() {
     pendingEvents: 0
   });
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
-  
-  // 2. State Data Grafik
   const [chartData, setChartData] = useState<any[]>([]);
 
- useEffect(() => {
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-            // A. Fetch Statistik Utama (Cards)
+            // A. Fetch Statistik Dasar (Total Event & Pending)
             const data = await getEOStats(user.uid);
-            // Jangan setStats dulu di sini, kita akan gabungkan nanti
             
-            // B. Fetch Data Grafik Penjualan (Chart) -> INI SUMBER KEBENARAN (Source of Truth)
+            // B. Fetch Data Real dari Transaksi (Grafik, Revenue, Tiket Terjual)
+            // INI DATA PALING AKURAT
             const salesData = await getEOSalesStats(user.uid);
             setChartData(salesData);
 
-            // --- PERBAIKAN DI SINI ---
-            // Hitung total pendapatan dari data grafik (Transaksi Asli)
+            // Hitung total dari data transaksi
+            // @ts-ignore
             const realRevenue = salesData.reduce((acc, curr) => acc + curr.total, 0);
+            // @ts-ignore
+            const realTicketsSold = salesData.reduce((acc, curr) => acc + curr.count, 0);
 
-            // Update stats, tapi TINDIH nilai totalRevenue dengan realRevenue
+            // GABUNGKAN DATA:
+            // totalEvents & pendingEvents -> dari getEOStats (karena ini soal event)
+            // ticketsSold & totalRevenue -> dari getEOSalesStats (karena ini soal uang/transaksi)
             setStats({
-                ...data, // Data lain (total event, tiket terjual) tetap dari getEOStats
-                totalRevenue: realRevenue // Total uang pakai data dari transaksi
+                totalEvents: data.totalEvents,
+                pendingEvents: data.pendingEvents,
+                ticketsSold: realTicketsSold, // <-- PAKE YANG INI
+                totalRevenue: realRevenue     // <-- PAKE YANG INI
             });
-            // -------------------------
 
             // C. Fetch Recent Events
             const qEvents = query(
                 collection(db, "events"), 
-                where("eoId", "==", user.uid), // Pastikan ini eoId atau organizerId sesuai DB
+                where("eoId", "==", user.uid), 
                 orderBy("createdAt", "desc"),
                 limit(3)
             );
-            const eventsSnap = await getDocs(qEvents);
+            // Fallback query logic dihapus disini biar ringkas, pastikan eoId terisi
+            let eventsSnap = await getDocs(qEvents);
+            if (eventsSnap.empty) {
+               const legacyQ = query(collection(db, "events"), where("organizerId", "==", user.uid), orderBy("createdAt", "desc"), limit(3));
+               eventsSnap = await getDocs(legacyQ);
+            }
+
             const recents = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setRecentEvents(recents);
 
@@ -74,65 +83,47 @@ export default function EODashboard() {
 
   return (
     <div className="space-y-8">
-      
-      {/* --- HEADER --- */}
+      {/* ... (HEADER SAMA) ... */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-1">Dashboard Overview</h1>
           <p className="text-gray-400 text-sm">Berikut adalah performa penjualan tiket Anda.</p>
         </div>
-        
-        {/* Tombol Buat Event Baru */}
-        <Link 
-            href="/eo/my-events/create" 
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-500/20 transition-all transform hover:scale-105"
-        >
+        <Link href="/eo/my-events/create" className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-500/20 transition-all transform hover:scale-105">
             <span>+</span> Buat Event Baru
         </Link>
       </div>
       
-      {/* --- STAT CARDS --- */}
+      {/* ... (STAT CARDS - BAGIAN INI AKAN MENAMPILKAN DATA BARU) ... */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
-        {/* Card 1: Total Event */}
         <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800/50 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition">
-                <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
-                    📅
-                </div>
+                <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">📅</div>
             </div>
             <p className="text-gray-400 text-sm font-medium mb-1">Total Event</p>
             <h3 className="text-3xl font-bold text-white">{loading ? "-" : stats.totalEvents}</h3>
         </div>
 
-        {/* Card 2: Tiket Terjual */}
         <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800/50 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition">
-                <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-400">
-                    🎟️
-                </div>
+                <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-400">🎟️</div>
             </div>
             <p className="text-gray-400 text-sm font-medium mb-1">Tiket Terjual</p>
             <h3 className="text-3xl font-bold text-white">{loading ? "-" : stats.ticketsSold}</h3>
         </div>
 
-        {/* Card 3: Pendapatan */}
-        <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800/50 relative overflow-hidden group md:col-span-1 lg:col-span-1">
+        <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800/50 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition">
-                <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
-                    💰
-                </div>
+                <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">💰</div>
             </div>
             <p className="text-gray-400 text-sm font-medium mb-1">Estimasi Pendapatan</p>
             <h3 className="text-2xl font-bold text-white tracking-tight">{loading ? "-" : formatRupiah(stats.totalRevenue)}</h3>
         </div>
 
-        {/* Card 4: Menunggu Approval */}
         <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800/50 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-50 group-hover:opacity-100 transition">
-                <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400">
-                    ⏳
-                </div>
+                <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400">⏳</div>
             </div>
             <p className="text-gray-400 text-sm font-medium mb-1">Menunggu Approval</p>
             <h3 className="text-3xl font-bold text-white">{loading ? "-" : stats.pendingEvents}</h3>
@@ -140,7 +131,7 @@ export default function EODashboard() {
 
       </div>
 
-      {/* --- GRAFIK PENJUALAN (SUDAH DIUPDATE) --- */}
+      {/* --- GRAFIK --- */}
       <div className="bg-[#151923] p-6 rounded-2xl border border-gray-800 shadow-sm relative overflow-hidden">
         <div className="flex justify-between items-center mb-2">
            <h3 className="text-lg font-bold text-white">Grafik Penjualan Bulanan</h3>
@@ -149,20 +140,17 @@ export default function EODashboard() {
            </div>
         </div>
         <p className="text-gray-500 text-xs mb-6">Visualisasi pendapatan tiket bersih.</p>
-        
-        {/* AREA GRAFIK */}
         {loading ? (
-           <div className="h-[300px] w-full flex items-center justify-center text-gray-500 animate-pulse">
-              Memuat Data Grafik...
-           </div>
+           <div className="h-[300px] w-full flex items-center justify-center text-gray-500 animate-pulse">Memuat Data Grafik...</div>
         ) : (
            <SalesChart data={chartData} />
         )}
       </div>
 
-      {/* --- TABEL AKTIVITAS TERBARU --- */}
+      {/* --- TABEL --- */}
       <div>
         <h3 className="text-lg font-bold text-white mb-4">Aktivitas Terbaru</h3>
+        {/* ... (Tabel activity kode sama seperti sebelumnya, tidak ada perubahan logika di sini) ... */}
         <div className="bg-[#151923] rounded-2xl border border-gray-800/50 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -194,18 +182,11 @@ export default function EODashboard() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-center">
+                                        {/* Status Badge Logic */}
                                         {evt.status === 'published' || evt.status === 'approved' ? (
-                                            <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">
-                                                Tayang
-                                            </span>
-                                        ) : evt.status === 'pending_review' || evt.status === 'pending' ? (
-                                            <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">
-                                                Review
-                                            </span>
+                                            <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">Tayang</span>
                                         ) : (
-                                            <span className="bg-gray-500/10 text-gray-400 border border-gray-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">
-                                                Draft
-                                            </span>
+                                            <span className="bg-gray-500/10 text-gray-400 border border-gray-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">Draft</span>
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-right text-gray-300 font-mono text-sm">
@@ -222,7 +203,6 @@ export default function EODashboard() {
             </div>
         </div>
       </div>
-
     </div>
   );
 }

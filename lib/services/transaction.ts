@@ -164,18 +164,17 @@ export const verifyTicket = async (orderId: string, currentEoId: string) => {
 };
 
 /**
- * 4. GET EO SALES STATS (Grafik Penjualan Dashboard) [FIXED]
+ * 4. GET EO SALES STATS (Grafik & Counter) [UPDATED]
+ * Mengembalikan data grafik bulan + total tiket terjual per bulan.
  */
 export const getEOSalesStats = async (eoId: string) => {
   try {
-    // A. Ambil semua ID Event milik EO ini
+    // A. Ambil semua ID Event milik EO
     const eventsQuery = query(collection(db, "events"), where("eoId", "==", eoId));
     let eventsSnapshot = await getDocs(eventsQuery);
 
-    // Fallback: Jika kosong, coba cek pakai 'organizerId' (untuk support data lama)
     if (eventsSnapshot.empty) {
        const legacyQuery = query(collection(db, "events"), where("organizerId", "==", eoId));
-       // PERBAIKAN DI SINI: Tambahkan 'getDocs(...)'
        eventsSnapshot = await getDocs(legacyQuery); 
     }
     
@@ -183,7 +182,7 @@ export const getEOSalesStats = async (eoId: string) => {
 
     if (eoEventIds.length === 0) return []; 
 
-    // B. Ambil Transaksi
+    // B. Ambil Transaksi Lunas
     const transQuery = query(
       collection(db, "transactions"),
       where("status", "in", ["settlement", "capture"]),
@@ -198,15 +197,17 @@ export const getEOSalesStats = async (eoId: string) => {
       .filter((t: any) => eoEventIds.includes(t.eventId));
 
     // C. Kelompokkan Data per Bulan
+    // Kita tambahkan properti 'count' untuk menghitung jumlah tiket
     const monthlyData = [
-      { name: 'Jan', total: 0 }, { name: 'Feb', total: 0 }, { name: 'Mar', total: 0 },
-      { name: 'Apr', total: 0 }, { name: 'Mei', total: 0 }, { name: 'Jun', total: 0 },
-      { name: 'Jul', total: 0 }, { name: 'Agu', total: 0 }, { name: 'Sep', total: 0 },
-      { name: 'Okt', total: 0 }, { name: 'Nov', total: 0 }, { name: 'Des', total: 0 },
+      { name: 'Jan', total: 0, count: 0 }, { name: 'Feb', total: 0, count: 0 }, 
+      { name: 'Mar', total: 0, count: 0 }, { name: 'Apr', total: 0, count: 0 }, 
+      { name: 'Mei', total: 0, count: 0 }, { name: 'Jun', total: 0, count: 0 },
+      { name: 'Jul', total: 0, count: 0 }, { name: 'Agu', total: 0, count: 0 }, 
+      { name: 'Sep', total: 0, count: 0 }, { name: 'Okt', total: 0, count: 0 }, 
+      { name: 'Nov', total: 0, count: 0 }, { name: 'Des', total: 0, count: 0 },
     ];
 
     eoTransactions.forEach((t: any) => {
-      // Handle Timestamp Firestore atau String
       let date;
       if (t.transactionTime?.toDate) {
         date = t.transactionTime.toDate(); 
@@ -214,10 +215,11 @@ export const getEOSalesStats = async (eoId: string) => {
         date = new Date(t.transactionTime); 
       }
 
-      const monthIndex = date.getMonth(); // 0 = Jan, 11 = Des
+      const monthIndex = date.getMonth(); 
       
       if (monthIndex >= 0 && monthIndex <= 11) {
         monthlyData[monthIndex].total += Number(t.amount); 
+        monthlyData[monthIndex].count += (t.qty || 1); // Tambah jumlah tiket (default 1 jika field qty ga ada)
       }
     });
 
