@@ -31,13 +31,19 @@ export default function CalendarPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  // app/(public)/kalender-event/page.tsx
+
   // 1. Fetch Data (Update: Dependensi ke selectedYear)
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      const realMonthIndex = activeAbsoluteIndex % 12;
-      // Fetch berdasarkan Bulan DAN Tahun yang dipilih
-      const data = await getEventsByMonth(realMonthIndex, selectedYear);
+      
+      const realMonthIndex = activeAbsoluteIndex % 12; // Hasil: 0 - 11
+
+      // PERBAIKAN DI SINI: Tambahkan +1
+      // Karena fungsi service butuh format 1 (Jan) sampai 12 (Des)
+      const data = await getEventsByMonth(selectedYear, realMonthIndex + 1);
+      
       setEvents(data);
       setLoading(false);
     }

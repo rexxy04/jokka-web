@@ -39,6 +39,7 @@ export interface EventFormData {
 export interface EventData extends EventFormData {
   id: string;
   posterUrl: string;
+  poster?: string;
   status: 'pending' | 'published' | 'rejected';
   eoId: string;
   createdAt: any;
