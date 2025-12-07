@@ -52,7 +52,19 @@ export default function ProfilePage() {
 
   // State Status Modal
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [statusModalContent, setStatusModalContent] = useState({ title: '', message: '' });
+
+
+  const [statusModalContent, setStatusModalContent] = useState<{
+    title: string;
+    message: string;
+    type?: 'success' | 'error'; // Kita tambahkan definisi type di sini
+  }>({ 
+    title: '', 
+    message: '', 
+    type: 'success' 
+  });
+
+  
   const [onModalCloseAction, setOnModalCloseAction] = useState<(() => void) | null>(null);
 
   // 2. STATE UNTUK CONFIRM MODAL (LOGOUT)
@@ -102,6 +114,7 @@ export default function ProfilePage() {
   };
 
   // --- LOGIC GANTI FOTO ---
+// --- LOGIC GANTI FOTO ---
   const handlePhotoClick = () => {
     fileInputRef.current?.click();
   };
@@ -110,8 +123,13 @@ export default function ProfilePage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
+      // 1. Validasi Ukuran
       if (file.size > 2 * 1024 * 1024) {
-        setStatusModalContent({ title: "Gagal Upload", message: "Ukuran foto terlalu besar! Maksimal 2MB." });
+        setStatusModalContent({ 
+            title: "Gagal Upload", 
+            message: "Ukuran foto terlalu besar! Maksimal 2MB.", 
+            type: 'error' // Icon Merah
+        });
         setShowStatusModal(true);
         return;
       }
@@ -119,11 +137,29 @@ export default function ProfilePage() {
       setUploadingPhoto(true);
       try {
         const res = await updateUserProfileImage(user, file);
-        setStatusModalContent({ title: "Berhasil! 📸", message: "Foto profil Anda telah diperbarui." });
+        
+        // 2. SUKSES: Set pesan & Action Reload
+        setStatusModalContent({ 
+            title: "Berhasil! 📸", 
+            message: "Foto profil berhasil diperbarui. Halaman akan dimuat ulang.", 
+            type: 'success' // Icon Hijau
+        });
+        
+        // 🔥 SOLUSI NAVBAR: Reload halaman setelah modal ditutup
+        setOnModalCloseAction(() => () => {
+            window.location.reload(); 
+        });
+        
         setShowStatusModal(true);
         setUser({ ...user, photoURL: res.photoURL });
+        
       } catch (error: any) {
-        setStatusModalContent({ title: "Gagal Upload", message: error.message });
+        // 3. GAGAL: Tampilkan error
+        setStatusModalContent({ 
+            title: "Gagal Upload", 
+            message: error.message, 
+            type: 'error' // Icon Merah
+        });
         setShowStatusModal(true);
       } finally {
         setUploadingPhoto(false);
