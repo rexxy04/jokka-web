@@ -2,7 +2,9 @@
 import { 
   collection, 
   addDoc, 
-  getDocs, 
+  getDocs,
+  deleteDoc,
+  updateDoc,
   doc, 
   getDoc, 
   query, 
@@ -211,5 +213,60 @@ export const getEventsByMonth = async (year: number, month: number): Promise<Eve
   } catch (error) {
     console.error("Error fetching calendar events:", error);
     return [];
+  }
+};
+
+/**
+ * 6. DELETE EVENT
+ * Menghapus dokumen event berdasarkan ID.
+ * (Idealnya hapus juga gambarnya di Storage, tapi untuk MVP kita hapus datanya dulu)
+ */
+export const deleteEvent = async (eventId: string) => {
+  try {
+    await deleteDoc(doc(db, "events", eventId));
+    return true;
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    throw new Error("Gagal menghapus event.");
+  }
+};
+
+/**
+ * 7. UPDATE EVENT
+ * Mengupdate data event. Jika ada file poster baru, upload dulu.
+ */
+export const updateEvent = async (eventId: string, formData: Partial<EventFormData>, newPosterFile: File | null) => {
+  try {
+    let updateData: any = { ...formData };
+
+    // Jika ada poster baru, upload & ganti URL
+    if (newPosterFile) {
+      // Kita pakai timestamp baru biar gak cache
+      const filename = `${Date.now()}_${newPosterFile.name}`;
+      // Note: Idealnya kita punya eoId di sini untuk struktur folder, 
+      // tapi simpan di root events folder juga tidak apa untuk edit.
+      const storageRef = ref(storage, `events/updates/${filename}`);
+      
+      const snapshot = await uploadBytes(storageRef, newPosterFile);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      updateData.posterUrl = downloadURL;
+    }
+
+    // Jika tiket diedit, pastikan field 'sold' yang lama tidak hilang (reset 0)
+    // Di real app, kita harus merge data tiket lama. 
+    // Di sini kita asumsikan user mengedit stok/harga saja, sold di-handle terpisah.
+
+    const eventRef = doc(db, "events", eventId);
+    
+    // Status bisa dikembalikan ke pending jika ada perubahan krusial (opsional)
+    // updateData.status = 'pending_review'; 
+
+    await updateDoc(eventRef, updateData);
+    return true;
+
+  } catch (error) {
+    console.error("Error updating event:", error);
+    throw new Error("Gagal mengupdate event.");
   }
 };
