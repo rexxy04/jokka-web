@@ -23,7 +23,12 @@ export default function CreateEventPage() {
 
   // 2. State untuk Modal
   const [showModal, setShowModal] = useState(false);
-  const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ title: '', message: '', type: 'success' });
+  // Tambahkan type: 'success' | 'error'
+  const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ 
+    title: '', 
+    message: '', 
+    type: 'success' 
+  });
   const [isSuccess, setIsSuccess] = useState(false); // Penanda redirect
 
   // Cek Login
@@ -52,14 +57,13 @@ export default function CreateEventPage() {
     endDate: '',
   });
 
-  // Array Tiket
   const [tickets, setTickets] = useState<TicketData[]>([
     { name: 'Regular', price: 0, stock: 100 }
   ]);
 
   const [poster, setPoster] = useState<File | null>(null);
 
-  // --- HANDLERS FORM UTAMA ---
+  // --- HANDLERS ---
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -72,7 +76,6 @@ export default function CreateEventPage() {
     setFormData(prev => ({ ...prev, lat, lng, locationName: address }));
   };
 
-  // --- HANDLERS KHUSUS TIKET ---
   const handleTicketChange = (index: number, field: keyof TicketData, value: string) => {
     const newTickets = [...tickets];
     // @ts-ignore
@@ -85,7 +88,7 @@ export default function CreateEventPage() {
   };
 
   const removeTicketVariant = (index: number) => {
-    // Ganti Alert Validation
+    // Validasi Modal
     if (tickets.length === 1) {
         setModalContent({
             title: "Tidak Bisa Hapus",
@@ -104,7 +107,7 @@ export default function CreateEventPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi Status EO (Ganti Alert)
+    // Validasi Status EO (Ganti Alert jadi Modal Error)
     if (eoProfile?.status !== 'verified') {
       setModalContent({
         title: "Akses Dibatasi",
@@ -116,7 +119,7 @@ export default function CreateEventPage() {
       return;
     }
 
-    // Validasi Poster (Ganti Alert)
+    // Validasi Poster
     if (!poster) {
         setModalContent({ title: "Poster Wajib", message: "Mohon upload poster event Anda agar terlihat menarik!", type: 'error' });
         setIsSuccess(false);
@@ -124,7 +127,7 @@ export default function CreateEventPage() {
         return;
     }
 
-    // Validasi Lokasi (Ganti Alert)
+    // Validasi Lokasi
     if (!formData.locationName) {
         setModalContent({ title: "Lokasi Kosong", message: "Silakan pilih lokasi event melalui peta.", type: 'error' });
         setIsSuccess(false);
@@ -150,7 +153,7 @@ export default function CreateEventPage() {
 
       await createEvent(finalData, poster, user.uid);
       
-      // SUKSES (Ganti Alert)
+      // SUKSES (Ganti Alert jadi Modal Success)
       setModalContent({
         title: "Event Berhasil Dibuat! 🎉",
         message: "Event Anda telah tersimpan dan sedang menunggu persetujuan Admin untuk tayang.",
@@ -160,7 +163,7 @@ export default function CreateEventPage() {
       setShowModal(true);
 
     } catch (error: any) {
-      // ERROR (Ganti Alert)
+      // ERROR
       setModalContent({
         title: "Gagal Membuat Event",
         message: error.message || "Terjadi kesalahan sistem.",
@@ -184,7 +187,6 @@ export default function CreateEventPage() {
 
   return (
     <div className="max-w-4xl mx-auto pb-10">
-      {/* JUDUL HALAMAN (Putih agar kontras dengan dashboard gelap) */}
       <h1 className="text-2xl font-bold text-white mb-6">Buat Event Baru 🎉</h1>
       
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 space-y-8">
@@ -193,7 +195,6 @@ export default function CreateEventPage() {
         <section className="space-y-4">
           <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b pb-2">Detail Acara</h3>
           
-          {/* Label manual dengan text-gray-900 agar hitam pekat */}
           <div>
             <label className="block text-xs font-medium text-gray-900 mb-1">Nama Event</label>
             <Input name="title" placeholder="Contoh: Konser Galau 2025" onChange={handleChange} required className="text-gray-900" />
@@ -254,7 +255,6 @@ export default function CreateEventPage() {
             {tickets.map((ticket, index) => (
               <div key={index} className="flex flex-col md:flex-row gap-3 items-end bg-gray-50 p-4 rounded-xl border border-gray-200 relative group">
                 
-                {/* Nama Tiket */}
                 <div className="flex-1 w-full">
                   {index === 0 && <label className="block text-xs font-medium text-gray-900 mb-1">Nama Tiket (cth: VIP)</label>}
                   <Input 
@@ -266,7 +266,6 @@ export default function CreateEventPage() {
                   />
                 </div>
                 
-                {/* Harga */}
                 <div className="w-full md:w-1/3">
                   {index === 0 && <label className="block text-xs font-medium text-gray-900 mb-1">Harga (Rp)</label>}
                   <Input 
@@ -279,7 +278,6 @@ export default function CreateEventPage() {
                   />
                 </div>
                 
-                {/* Stok */}
                 <div className="w-full md:w-1/4">
                   {index === 0 && <label className="block text-xs font-medium text-gray-900 mb-1">Kuota</label>}
                   <Input 
@@ -292,7 +290,6 @@ export default function CreateEventPage() {
                   />
                 </div>
 
-                {/* Tombol Hapus */}
                 {tickets.length > 1 && (
                   <button 
                     type="button" 
@@ -321,10 +318,10 @@ export default function CreateEventPage() {
       {/* 3. Render Modal */}
       <StatusModal 
         isOpen={showModal} 
-        onClose={handleCloseModal} // Menggunakan handler khusus
+        onClose={handleCloseModal} 
         title={modalContent.title}
         message={modalContent.message}
-        type={modalContent.type}
+        type={modalContent.type} // <-- Penting agar icon berubah
       />
     </div>
   );

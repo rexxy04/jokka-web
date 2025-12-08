@@ -6,8 +6,9 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/services/auth';
-// 1. Import StatusModal
+// 1. Import Component Modal
 import StatusModal from '@/components/ui/StatusModal';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 export default function EOLayout({
   children,
@@ -18,18 +19,14 @@ export default function EOLayout({
   const [authorized, setAuthorized] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // 2. State untuk Modal
-  const [showModal, setShowModal] = useState(false);
-  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  // State untuk Modal Akses Ditolak
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusModalContent, setStatusModalContent] = useState({ title: '', message: '' });
 
-  const handleLogout = async () => {
-    // Kita biarkan confirm bawaan browser untuk logout agar ada opsi Yes/No
-    if (confirm("Yakin ingin keluar dari sesi EO?")) {
-        await signOut(auth);
-        router.push('/login');
-    }
-  };
+  // 2. State untuk Modal Logout
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+  // Logic Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
@@ -40,45 +37,52 @@ export default function EOLayout({
           setAuthorized(true);
           setUser(currentUser);
         } else {
-          // 🔴 KODE LAMA (DIHAPUS):
-          // alert("Halaman ini khusus Partner EO.");
-          // router.push('/');
-
-          // 🟢 KODE BARU (PAKAI MODAL):
-          // Kita tampilkan modal, redirect dilakukan saat modal ditutup (lihat logic render di bawah)
-          setModalContent({
+          // Akses Ditolak
+          setStatusModalContent({
             title: "Akses Ditolak",
             message: "Akun Anda tidak memiliki izin untuk mengakses Dashboard EO."
           });
-          setShowModal(true);
+          setShowStatusModal(true);
         }
       }
     });
     return () => unsubscribe();
   }, [router]);
 
-  // JIKA BELUM AUTHORIZED (Loading atau Akses Ditolak)
+  // 3. Handler Tombol Logout (Cuma buka modal)
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  // 4. Eksekusi Logout (Setelah dikonfirmasi "Ya")
+  const onConfirmLogout = async () => {
+    await signOut(auth);
+    router.push('/login');
+    setShowLogoutModal(false);
+  };
+
+  // Tampilan Loading / Akses Ditolak
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0F111A] text-white">
         <p className="text-gray-400 animate-pulse">Memuat Dashboard EO...</p>
         
-        {/* 3. Render Modal di sini agar muncul saat akses ditolak */}
+        {/* Modal Akses Ditolak */}
         <StatusModal 
-            isOpen={showModal}
-            title={modalContent.title}
-            message={modalContent.message}
+            isOpen={showStatusModal}
+            title={statusModalContent.title}
+            message={statusModalContent.message}
             onClose={() => {
-                setShowModal(false);
-                // Redirect ke Home hanya jika modal ditutup saat state belum authorized
+                setShowStatusModal(false);
                 router.push('/'); 
             }}
+            type="error"
         />
       </div>
     );
   }
 
-  // JIKA AUTHORIZED (Tampilkan Layout Utama)
+  // Tampilan Utama Dashboard
   return (
     <div className="min-h-screen flex bg-[#0F111A] font-sans text-gray-200">
       
@@ -99,7 +103,6 @@ export default function EOLayout({
         
         {/* Menu Navigasi */}
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {/* Kita pakai SidebarItem lokal yang ada di bawah */}
           <SidebarItem href="/eo/dashboard" icon="dashboard" label="Dashboard" />
           <SidebarItem href="/eo/my-events" icon="calendar" label="Event Saya" />
           <SidebarItem href="/eo/sales" icon="chart" label="Laporan Penjualan" />
@@ -114,7 +117,12 @@ export default function EOLayout({
                 </div>
                 <div className="overflow-hidden">
                     <p className="text-sm font-bold text-white truncate">{user?.displayName || "EO User"}</p>
-                    <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-400 transition text-left">
+                    
+                    {/* Tombol Logout Sidebar */}
+                    <button 
+                      onClick={handleLogoutClick} 
+                      className="text-xs text-gray-500 hover:text-red-400 transition text-left flex items-center gap-1"
+                    >
                         Logout
                     </button>
                 </div>
@@ -126,9 +134,11 @@ export default function EOLayout({
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-indigo-900/10 to-transparent pointer-events-none z-0" />
 
+        {/* Mobile Header */}
         <header className="md:hidden bg-[#151923] text-white p-4 flex justify-between items-center border-b border-gray-800 z-10">
           <span className="font-bold">EO Panel</span>
-          <button onClick={handleLogout} className="text-xs bg-red-600/20 text-red-400 px-3 py-1 rounded-full">Keluar</button>
+          {/* Tombol Logout Mobile */}
+          <button onClick={handleLogoutClick} className="text-xs bg-red-600/20 text-red-400 px-3 py-1 rounded-full">Keluar</button>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-10 z-10 relative">
@@ -136,18 +146,22 @@ export default function EOLayout({
         </div>
       </main>
 
-      {/* 4. Pasang Modal juga di sini (jaga-jaga untuk penggunaan lain di masa depan) */}
-      <StatusModal 
-        isOpen={showModal} 
-        onClose={() => setShowModal(false)}
-        title={modalContent.title}
-        message={modalContent.message}
+      {/* 5. Render Modal Konfirmasi Logout */}
+      <ConfirmModal 
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={onConfirmLogout}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin mengakhiri sesi EO ini?"
+        confirmText="Ya, Keluar"
+        cancelText="Batal"
+        isDanger={true}
       />
     </div>
   );
 }
 
-// --- KOMPONEN LOKAL SIDEBAR ITEM (CUSTOM DARK MODE) ---
+// --- KOMPONEN LOKAL SIDEBAR ITEM ---
 const SidebarItem = ({ href, icon, label }: { href: string; icon: string; label: string }) => {
     const getIcon = (name: string) => {
         if (name === 'dashboard') return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
