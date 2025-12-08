@@ -23,7 +23,12 @@ export default function CreateEventPage() {
 
   // 2. State untuk Modal
   const [showModal, setShowModal] = useState(false);
-  const [modalContent, setModalContent] = useState({ title: '', message: '' });
+  // Tambahkan type: 'success' | 'error'
+  const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ 
+    title: '', 
+    message: '', 
+    type: 'success' 
+  });
   const [isSuccess, setIsSuccess] = useState(false); // Penanda redirect
 
   // Cek Login
@@ -52,14 +57,13 @@ export default function CreateEventPage() {
     endDate: '',
   });
 
-  // Array Tiket
   const [tickets, setTickets] = useState<TicketData[]>([
     { name: 'Regular', price: 0, stock: 100 }
   ]);
 
   const [poster, setPoster] = useState<File | null>(null);
 
-  // --- HANDLERS FORM UTAMA ---
+  // --- HANDLERS ---
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -72,7 +76,6 @@ export default function CreateEventPage() {
     setFormData(prev => ({ ...prev, lat, lng, locationName: address }));
   };
 
-  // --- HANDLERS KHUSUS TIKET ---
   const handleTicketChange = (index: number, field: keyof TicketData, value: string) => {
     const newTickets = [...tickets];
     // @ts-ignore
@@ -85,11 +88,12 @@ export default function CreateEventPage() {
   };
 
   const removeTicketVariant = (index: number) => {
-    // Ganti Alert Validation
+    // Validasi Modal
     if (tickets.length === 1) {
         setModalContent({
             title: "Tidak Bisa Hapus",
-            message: "Minimal harus ada 1 jenis tiket dalam sebuah event."
+            message: "Minimal harus ada 1 jenis tiket dalam sebuah event.",
+            type: 'error'
         });
         setIsSuccess(false);
         setShowModal(true);
@@ -103,28 +107,29 @@ export default function CreateEventPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi Status EO (Ganti Alert)
+    // Validasi Status EO (Ganti Alert jadi Modal Error)
     if (eoProfile?.status !== 'verified') {
       setModalContent({
         title: "Akses Dibatasi",
-        message: "Akun Anda belum diverifikasi oleh Admin. Anda belum bisa membuat event."
+        message: "Akun Anda belum diverifikasi oleh Admin. Anda belum bisa membuat event.",
+        type: 'error'
       });
       setIsSuccess(false);
       setShowModal(true);
       return;
     }
 
-    // Validasi Poster (Ganti Alert)
+    // Validasi Poster
     if (!poster) {
-        setModalContent({ title: "Poster Wajib", message: "Mohon upload poster event Anda agar terlihat menarik!" });
+        setModalContent({ title: "Poster Wajib", message: "Mohon upload poster event Anda agar terlihat menarik!", type: 'error' });
         setIsSuccess(false);
         setShowModal(true);
         return;
     }
 
-    // Validasi Lokasi (Ganti Alert)
+    // Validasi Lokasi
     if (!formData.locationName) {
-        setModalContent({ title: "Lokasi Kosong", message: "Silakan pilih lokasi event melalui peta." });
+        setModalContent({ title: "Lokasi Kosong", message: "Silakan pilih lokasi event melalui peta.", type: 'error' });
         setIsSuccess(false);
         setShowModal(true);
         return;
@@ -133,7 +138,7 @@ export default function CreateEventPage() {
     // Validasi Tiket
     const isTicketValid = tickets.every(t => t.name && t.stock > 0);
     if (!isTicketValid) {
-        setModalContent({ title: "Data Tiket Belum Lengkap", message: "Pastikan nama tiket terisi dan stok minimal 1." });
+        setModalContent({ title: "Data Tiket Belum Lengkap", message: "Pastikan nama tiket terisi dan stok minimal 1.", type: 'error' });
         setIsSuccess(false);
         setShowModal(true);
         return;
@@ -148,19 +153,21 @@ export default function CreateEventPage() {
 
       await createEvent(finalData, poster, user.uid);
       
-      // SUKSES (Ganti Alert)
+      // SUKSES (Ganti Alert jadi Modal Success)
       setModalContent({
         title: "Event Berhasil Dibuat! 🎉",
-        message: "Event Anda telah tersimpan dan sedang menunggu persetujuan Admin untuk tayang."
+        message: "Event Anda telah tersimpan dan sedang menunggu persetujuan Admin untuk tayang.",
+        type: 'success'
       });
       setIsSuccess(true); // Set true agar redirect saat close
       setShowModal(true);
 
     } catch (error: any) {
-      // ERROR (Ganti Alert)
+      // ERROR
       setModalContent({
         title: "Gagal Membuat Event",
-        message: error.message || "Terjadi kesalahan sistem."
+        message: error.message || "Terjadi kesalahan sistem.",
+        type: 'error'
       });
       setIsSuccess(false);
       setShowModal(true);
@@ -179,8 +186,8 @@ export default function CreateEventPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Buat Event Baru 🎉</h1>
+    <div className="max-w-4xl mx-auto pb-10">
+      <h1 className="text-2xl font-bold text-white mb-6">Buat Event Baru 🎉</h1>
       
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 space-y-8">
         
@@ -188,12 +195,15 @@ export default function CreateEventPage() {
         <section className="space-y-4">
           <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b pb-2">Detail Acara</h3>
           
-          <Input label="Nama Event" name="title" placeholder="Contoh: Konser Galau 2025" onChange={handleChange} required />
+          <div>
+            <label className="block text-xs font-medium text-gray-900 mb-1">Nama Event</label>
+            <Input name="title" placeholder="Contoh: Konser Galau 2025" onChange={handleChange} required className="text-gray-900" />
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Kategori</label>
-              <select name="category" onChange={handleChange} className="w-full px-4 py-3 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <label className="block text-xs font-medium text-gray-900 mb-1">Kategori</label>
+              <select name="category" onChange={handleChange} className="w-full px-4 py-3 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900">
                 <option value="Musik">Musik</option>
                 <option value="Festival">Festival</option>
                 <option value="Workshop">Workshop</option>
@@ -203,24 +213,30 @@ export default function CreateEventPage() {
             </div>
             
             <div>
-               <label className="block text-xs font-medium text-gray-700 mb-1">Lokasi (Pilih di Peta Bawah)</label>
-               <input className="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed" value={formData.locationName} readOnly placeholder="Pilih lokasi di peta..." />
+               <label className="block text-xs font-medium text-gray-900 mb-1">Lokasi (Pilih di Peta Bawah)</label>
+               <input className="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-900 cursor-not-allowed" value={formData.locationName} readOnly placeholder="Pilih lokasi di peta..." />
             </div>
           </div>
 
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-            <label className="block text-xs font-bold text-blue-800 mb-2">Cari Lokasi Event</label>
+            <label className="block text-xs font-bold text-blue-900 mb-2">Cari Lokasi Event</label>
             <LocationPicker onLocationSelect={handleLocationSelect} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Waktu Mulai" name="startDate" type="datetime-local" onChange={handleChange} required />
-            <Input label="Waktu Selesai" name="endDate" type="datetime-local" onChange={handleChange} required />
+            <div>
+                <label className="block text-xs font-medium text-gray-900 mb-1">Waktu Mulai</label>
+                <Input name="startDate" type="datetime-local" onChange={handleChange} required className="text-gray-900" />
+            </div>
+            <div>
+                <label className="block text-xs font-medium text-gray-900 mb-1">Waktu Selesai</label>
+                <Input name="endDate" type="datetime-local" onChange={handleChange} required className="text-gray-900" />
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Deskripsi Lengkap</label>
-            <textarea name="description" rows={4} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Jelaskan detail acara..." onChange={handleChange} required />
+            <label className="block text-xs font-medium text-gray-900 mb-1">Deskripsi Lengkap</label>
+            <textarea name="description" rows={4} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900" placeholder="Jelaskan detail acara..." onChange={handleChange} required />
           </div>
 
           <FileInput label="Upload Poster Event (Wajib)" accept="image/*" onChange={handleFileChange} required />
@@ -238,47 +254,47 @@ export default function CreateEventPage() {
           <div className="space-y-3">
             {tickets.map((ticket, index) => (
               <div key={index} className="flex flex-col md:flex-row gap-3 items-end bg-gray-50 p-4 rounded-xl border border-gray-200 relative group">
-                {/* Nama Tiket */}
+                
                 <div className="flex-1 w-full">
+                  {index === 0 && <label className="block text-xs font-medium text-gray-900 mb-1">Nama Tiket (cth: VIP)</label>}
                   <Input 
-                    label={index === 0 ? "Nama Tiket (cth: VIP)" : ""} 
                     placeholder="Nama Tiket" 
                     value={ticket.name} 
                     onChange={(e) => handleTicketChange(index, 'name', e.target.value)} 
                     required 
+                    className="text-gray-900 bg-white"
                   />
                 </div>
                 
-                {/* Harga */}
                 <div className="w-full md:w-1/3">
+                  {index === 0 && <label className="block text-xs font-medium text-gray-900 mb-1">Harga (Rp)</label>}
                   <Input 
-                    label={index === 0 ? "Harga (Rp)" : ""} 
                     type="number" 
                     placeholder="0" 
                     value={ticket.price.toString()} 
                     onChange={(e) => handleTicketChange(index, 'price', e.target.value)} 
                     required 
+                    className="text-gray-900 bg-white"
                   />
                 </div>
                 
-                {/* Stok */}
                 <div className="w-full md:w-1/4">
+                  {index === 0 && <label className="block text-xs font-medium text-gray-900 mb-1">Kuota</label>}
                   <Input 
-                    label={index === 0 ? "Kuota" : ""} 
                     type="number" 
                     placeholder="100" 
                     value={ticket.stock.toString()} 
                     onChange={(e) => handleTicketChange(index, 'stock', e.target.value)} 
                     required 
+                    className="text-gray-900 bg-white"
                   />
                 </div>
 
-                {/* Tombol Hapus */}
                 {tickets.length > 1 && (
                   <button 
                     type="button" 
                     onClick={() => removeTicketVariant(index)}
-                    className="md:mb-3 text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition"
+                    className="md:mb-1 text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition"
                     title="Hapus varian ini"
                   >
                     🗑️
@@ -287,7 +303,7 @@ export default function CreateEventPage() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-400 italic">*Tiket dengan harga 0 akan dianggap Gratis.</p>
+          <p className="text-xs text-gray-500 italic">*Tiket dengan harga 0 akan dianggap Gratis.</p>
         </section>
 
         {/* SUBMIT */}
@@ -302,9 +318,10 @@ export default function CreateEventPage() {
       {/* 3. Render Modal */}
       <StatusModal 
         isOpen={showModal} 
-        onClose={handleCloseModal} // Menggunakan handler khusus
+        onClose={handleCloseModal} 
         title={modalContent.title}
         message={modalContent.message}
+        type={modalContent.type} // <-- Penting agar icon berubah
       />
     </div>
   );
