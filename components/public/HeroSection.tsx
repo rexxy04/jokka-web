@@ -11,9 +11,6 @@ const HeroSection = () => {
   // Logic Pencarian
   const handleSearch = () => {
     if (query.trim() === '') return; // Cegah pencarian kosong
-
-    // Redirect ke halaman search dengan query params
-    // Contoh url nanti: /search?q=pantai
     router.push(`/search?q=${encodeURIComponent(query)}`);
   };
 
@@ -41,12 +38,19 @@ const HeroSection = () => {
       {/* Content */}
       <div className="relative z-10 text-center px-4 max-w-4xl mx-auto mt-10">
         
-        <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4 drop-shadow-lg tracking-tight animate-fade-in-up">
-          Jelajahi Serunya <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">Jokka.</span>
+        {/* PERUBAHAN DISINI: 
+            1. Menggunakan 'leading-none' agar jarak antar baris sangat rapat.
+            2. Menghapus 'mt-2' pada span agar tidak ada margin tambahan.
+        */}
+        <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4 drop-shadow-lg tracking-tight animate-fade-in-up leading-none">
+          Jelajahi Serunya
+          <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
+            Kota Makassar.
+          </span>
         </h1>
         
         <p className="text-gray-200 text-lg md:text-xl mb-8 max-w-2xl mx-auto animate-fade-in-up delay-100">
-          Temukan event musik, destinasi wisata, dan kuliner terbaik di sekitarmu hanya dalam satu aplikasi.
+          Portal informasi event musik, destinasi wisata, dan kuliner lokal terbaik untuk melengkapi pengalaman Jokka-jokka kamu.
         </p>
 
         {/* Search Bar Besar */}
@@ -60,7 +64,7 @@ const HeroSection = () => {
           
           <input 
             type="text" 
-            placeholder="Cari konser, pantai, atau museum..." 
+            placeholder="Cari konser, pantai, atau coto..." 
             className="w-full px-4 py-3 outline-none text-gray-700 text-lg rounded-full placeholder:text-gray-400 bg-transparent"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

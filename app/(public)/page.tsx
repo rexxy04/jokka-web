@@ -78,7 +78,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center text-center mb-10">
           <h2 className="text-3xl md:text-5xl font-extrabold mb-3 tracking-tight">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-500">
-              Event Pilihan 🔥
+              Event Terbaru 🔥
             </span>
           </h2>
           <p className="text-gray-500 text-lg mb-4 max-w-xl">
