@@ -7,14 +7,15 @@ interface EventDetail {
   id: string;
   title: string;
   category: string;
-  poster: string;
+  // UPDATE: Tambahkan posterUrl & jadikan poster optional
+  posterUrl?: string; 
+  poster?: string;
   description: string;
   locationName: string;
   lat?: number;
   lng?: number;
   startDate: string;
   endDate: string;
-  // tickets bisa punya sold atau tidak (undefined)
   tickets?: { name: string; price: number; stock: number; sold?: number }[];
 }
 
@@ -71,20 +72,17 @@ export default async function EventDetailPage({
     );
   }
   
-  // Tentukan harga termurah untuk display
   const minPrice = event.tickets && event.tickets.length > 0 
     ? Math.min(...event.tickets.map(t => t.price)) 
     : 0;
   
   const ticketInfo = formatPrice(minPrice);
   
-  // PERBAIKAN DATA TIKET DISINI
-  // Kita map ulang array tiketnya untuk memastikan 'sold' selalu ada isinya (minimal 0)
   const sanitizedTickets = event.tickets?.map(t => ({
     name: t.name,
     price: t.price,
     stock: t.stock,
-    sold: t.sold || 0 // Jika undefined, paksa jadi 0
+    sold: t.sold || 0
   })) || [];
 
   return (
@@ -93,7 +91,8 @@ export default async function EventDetailPage({
         id={event.id}
         type="event"
         title={event.title}
-        image={event.poster}
+        // PERBAIKAN DISINI: Prioritaskan posterUrl (Data Baru) -> poster (Data Lama) -> Placeholder
+        image={event.posterUrl || event.poster || '/placeholder-event.jpg'}
         category={event.category}
         description={event.description}
         location={event.locationName}
@@ -101,11 +100,9 @@ export default async function EventDetailPage({
         price={ticketInfo}
         eventId={event.id}
         
-        // KOORDINAT MAP
         lat={event.lat}
         lng={event.lng}
 
-        // KIRIM TIKET YANG SUDAH DIBERSIHKAN
         tickets={sanitizedTickets} 
       />
     </main>
