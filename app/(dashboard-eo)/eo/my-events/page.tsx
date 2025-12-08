@@ -5,56 +5,80 @@ import Link from 'next/link';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getMyEvents } from '@/lib/services/eo';
-// Import getEOSalesReport untuk ambil data transaksi mentah
+// 1. Import Service Delete & Laporan Penjualan (Untuk hitung sold)
 import { getEOSalesReport } from '@/lib/services/eo'; 
+import { deleteEvent } from '@/lib/services/event'; // Import fungsi delete
+// 2. Import Modal
+import StatusModal from '@/components/ui/StatusModal';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 export default function MyEventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // State Modals
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusContent, setStatusContent] = useState({ title: '', message: '', type: 'success' as 'success'|'error' });
+  
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  // Fetch Data
+  const fetchData = async (uid: string) => {
+    setLoading(true);
+    try {
+        const eventsData = await getMyEvents(uid);
+        const salesData = await getEOSalesReport(uid);
+
+        const processedEvents = eventsData.map((evt) => {
+            const relatedSales = salesData.filter((s: any) => s.eventId === evt.id);
+            const realSold = relatedSales.reduce((acc: number, curr: any) => acc + (curr.qty || 1), 0);
+            return { ...evt, realSold: realSold };
+        });
+        setEvents(processedEvents);
+    } catch (error) {
+        console.error(error);
+    } finally {
+        setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-            // 1. Ambil Data Event
-            const eventsData = await getMyEvents(user.uid);
-            
-            // 2. Ambil Data Transaksi (Source of Truth)
-            const salesData = await getEOSalesReport(user.uid);
-
-            // 3. Gabungkan Data (Hitung manual terjual berdasarkan transaksi)
-            const processedEvents = eventsData.map((evt) => {
-                // Cari transaksi yang punya eventId == evt.id
-                // Dan statusnya sukses
-                const relatedSales = salesData.filter((s: any) => s.eventId === evt.id);
-                
-                // Hitung total qty tiket
-                const realSold = relatedSales.reduce((acc: number, curr: any) => acc + (curr.qty || 1), 0);
-
-                return {
-                    ...evt,
-                    realSold: realSold // Simpan di property baru 'realSold'
-                };
-            });
-
-            setEvents(processedEvents);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-      }
+      if (user) fetchData(user.uid);
     });
     return () => unsubscribe();
   }, []);
 
+  // --- LOGIC DELETE ---
+  const handleDeleteClick = (id: string) => {
+    setDeleteTargetId(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+        await deleteEvent(deleteTargetId);
+        
+        setStatusContent({ title: "Terhapus", message: "Event berhasil dihapus.", type: 'success' });
+        setShowStatusModal(true);
+        setShowConfirmModal(false);
+        
+        // Refresh data
+        if (auth.currentUser) fetchData(auth.currentUser.uid);
+
+    } catch (error: any) {
+        setStatusContent({ title: "Gagal", message: "Gagal menghapus event.", type: 'error' });
+        setShowStatusModal(true);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'published':
-      case 'approved':
+      case 'published': case 'approved':
         return <span className="bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Tayang</span>;
-      case 'pending_review':
-      case 'pending':
+      case 'pending_review': case 'pending':
         return <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Review</span>;
       case 'rejected':
         return <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Ditolak</span>;
@@ -67,6 +91,7 @@ export default function MyEventsPage() {
 
   return (
     <div className="space-y-8">
+      
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -74,10 +99,7 @@ export default function MyEventsPage() {
           <p className="text-gray-400 text-sm">Kelola semua event yang Anda selenggarakan.</p>
         </div>
         <div>
-          <Link 
-            href="/eo/my-events/create" 
-            className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-purple-500/20 transition-all transform hover:scale-105"
-          >
+          <Link href="/eo/my-events/create" className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-purple-500/20 transition-all transform hover:scale-105">
             <span>+</span> Buat Event Baru
           </Link>
         </div>
@@ -114,15 +136,11 @@ export default function MyEventsPage() {
                 {events.map((event) => (
                   <tr key={event.id} className="hover:bg-[#1E2230] transition duration-200">
                     
-                    {/* Kolom 1: Event */}
+                    {/* Event Info */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <div className="h-14 w-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-700 border border-gray-600">
-                          <img 
-                            className="h-full w-full object-cover" 
-                            src={event.posterUrl || event.poster || '/placeholder-event.jpg'} 
-                            alt="" 
-                          />
+                          <img className="h-full w-full object-cover" src={event.posterUrl || event.poster || '/placeholder-event.jpg'} alt="" />
                         </div>
                         <div>
                           <div className="text-sm font-bold text-white line-clamp-1 mb-1">{event.title}</div>
@@ -131,7 +149,7 @@ export default function MyEventsPage() {
                       </div>
                     </td>
 
-                    {/* Kolom 2: Tanggal */}
+                    {/* Date & Loc */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-300">
                         {event.startDate ? new Date(event.startDate).toLocaleDateString('id-ID') : '-'}
@@ -139,31 +157,43 @@ export default function MyEventsPage() {
                       <div className="text-xs text-gray-500 mt-1 max-w-[150px] truncate">{event.locationName}</div>
                     </td>
 
-                    {/* Kolom 3: Tiket */}
+                    {/* Ticket */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-white font-mono">
                         {event.tickets && event.tickets[0] ? formatPrice(event.tickets[0].price) : "Gratis"}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {/* UPDATE: Gunakan 'realSold' yang kita hitung di useEffect */}
                         Terjual: <span className="text-green-400 font-bold">{event.realSold || 0}</span> / {event.tickets?.[0]?.stock}
                       </div>
                     </td>
 
-                    {/* Kolom 4: Status */}
+                    {/* Status */}
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       {getStatusBadge(event.status)}
                     </td>
 
-                    {/* Kolom 5: Aksi */}
+                    {/* Action Buttons */}
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <Link 
-                        href={`/event/${event.id}`} 
-                        target="_blank"
-                        className="text-indigo-400 hover:text-white font-medium text-sm transition hover:underline"
-                      >
-                        Lihat
-                      </Link>
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Tombol Lihat */}
+                        <Link href={`/event/${event.id}`} target="_blank" className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition" title="Lihat di Web">
+                           👁️
+                        </Link>
+                        
+                        {/* Tombol Edit */}
+                        <Link href={`/eo/my-events/edit/${event.id}`} className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition" title="Edit Event">
+                           ✏️
+                        </Link>
+
+                        {/* Tombol Hapus */}
+                        <button 
+                            onClick={() => handleDeleteClick(event.id)}
+                            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition"
+                            title="Hapus Event"
+                        >
+                           🗑️
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -172,6 +202,26 @@ export default function MyEventsPage() {
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <StatusModal 
+        isOpen={showStatusModal} 
+        onClose={() => setShowStatusModal(false)} 
+        title={statusContent.title}
+        message={statusContent.message}
+        type={statusContent.type}
+      />
+
+      <ConfirmModal 
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmDelete}
+        title="Hapus Event?"
+        message="Event yang dihapus tidak dapat dikembalikan. Data penjualan terkait mungkin akan tetap ada di laporan."
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        isDanger={true}
+      />
     </div>
   );
 }
