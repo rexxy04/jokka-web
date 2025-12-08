@@ -8,7 +8,7 @@ import { getPublicEvents, EventData } from '@/lib/services/event';
 import { getFeaturedDestinations, DestinationData } from '@/lib/services/destination';
 
 // 2. Import Components
-import HeroSection from '@/components/public/HeroSection'; // <--- Import Hero Baru
+import HeroSection from '@/components/public/HeroSection';
 import EventPortraitCard from '@/components/event/EventPortraitCard';
 import DestinationCard from '@/components/destination/DestinationCard';
 
@@ -54,11 +54,11 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-gray-50 pb-20">
       
-      {/* 1. HERO SECTION (REFACTORED) */}
+      {/* 1. HERO SECTION */}
       <HeroSection />
 
       {/* 2. KATEGORI CEPAT */}
-      <section className="container mx-auto px-4 -mt-16 relative z-20 mb-16">
+      <section className="container mx-auto px-4 -mt-16 relative z-20 mb-20">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 flex flex-wrap justify-between md:justify-center gap-6 md:gap-12">
           {categories.map((cat, idx) => (
             <Link key={idx} href={cat.path} className="flex flex-col items-center gap-3 group cursor-pointer">
@@ -71,22 +71,31 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 3. EVENT TERLARIS */}
-      <section className="container mx-auto px-4 mb-16">
-        <div className="flex justify-between items-end mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Event Pilihan 🔥</h2>
-            <p className="text-gray-500 text-sm mt-1">Acara paling ramai minggu ini.</p>
-          </div>
-          <Link href="/event" className="text-blue-600 font-semibold hover:underline text-sm">Lihat Semua</Link>
+      {/* 3. EVENT TERLARIS (Center & Gradient Title) */}
+      <section className="container mx-auto px-4 mb-20">
+        
+        {/* Header Section Tengah */}
+        <div className="flex flex-col items-center text-center mb-10">
+          <h2 className="text-3xl md:text-5xl font-extrabold mb-3 tracking-tight">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-500">
+              Event Pilihan 🔥
+            </span>
+          </h2>
+          <p className="text-gray-500 text-lg mb-4 max-w-xl">
+            Jangan lewatkan acara paling ramai dan seru minggu ini.
+          </p>
+          <Link href="/event" className="text-blue-600 font-bold hover:underline flex items-center gap-1 transition-all hover:gap-2">
+            Lihat Semua Event &rarr;
+          </Link>
         </div>
 
+        {/* Content */}
         {loading ? (
-          <div className="flex gap-4 overflow-hidden">
+          <div className="flex gap-4 overflow-hidden justify-center">
             {[1,2,3,4].map(i => <div key={i} className="w-[260px] h-[380px] bg-gray-200 rounded-[2rem] animate-pulse shrink-0" />)}
           </div>
         ) : events.length > 0 ? (
-          <div className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory scrollbar-hide">
+          <div className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory scrollbar-hide md:justify-center">
             {events.map((event) => (
               <div key={event.id} className="snap-center shrink-0 w-[260px]">
                 <EventPortraitCard 
@@ -106,7 +115,7 @@ export default function HomePage() {
       </section>
 
       {/* 4. BANNER CTA PARTNER EO */}
-      <section className="container mx-auto px-4 mb-16">
+      <section className="container mx-auto px-4 mb-20">
         <div className="bg-gradient-to-r from-indigo-900 to-blue-900 rounded-3xl p-8 md:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full -ml-10 -mb-10 blur-2xl"></div>
@@ -133,14 +142,22 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 5. DESTINASI POPULER */}
-      <section className="container mx-auto px-4 mb-12">
-        <div className="flex justify-between items-end mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Destinasi Populer 🏝️</h2>
-            <p className="text-gray-500 text-sm mt-1">Tempat wisata wajib dikunjungi.</p>
-          </div>
-          <Link href="/destinasi" className="text-blue-600 font-semibold hover:underline text-sm">Lihat Semua</Link>
+      {/* 5. DESTINASI POPULER (Center & Gradient Title) */}
+      <section className="container mx-auto px-4 mb-20">
+        
+        {/* Header Section Tengah */}
+        <div className="flex flex-col items-center text-center mb-10">
+          <h2 className="text-3xl md:text-5xl font-extrabold mb-3 tracking-tight">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-500">
+              Destinasi Populer 🏝️
+            </span>
+          </h2>
+          <p className="text-gray-500 text-lg mb-4 max-w-xl">
+            Jelajahi keindahan alam dan tempat wisata terbaik rekomendasi kami.
+          </p>
+          <Link href="/destinasi" className="text-blue-600 font-bold hover:underline flex items-center gap-1 transition-all hover:gap-2">
+            Lihat Semua Destinasi &rarr;
+          </Link>
         </div>
 
         {loading ? (
@@ -168,7 +185,6 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* CSS Animasi */}
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

@@ -164,40 +164,47 @@ export const verifyTicket = async (orderId: string, currentEoId: string) => {
 };
 
 /**
- * 4. GET EO SALES STATS (Grafik & Counter) [UPDATED]
- * Mengembalikan data grafik bulan + total tiket terjual per bulan.
+ * 4. GET EO SALES STATS (Grafik & Counter) [FIXED MERGE QUERY]
+ * Mengambil event dari 'eoId' DAN 'organizerId' secara bersamaan agar tidak ada yang terlewat.
  */
 export const getEOSalesStats = async (eoId: string) => {
   try {
-    // A. Ambil semua ID Event milik EO
-    const eventsQuery = query(collection(db, "events"), where("eoId", "==", eoId));
-    let eventsSnapshot = await getDocs(eventsQuery);
-
-    if (eventsSnapshot.empty) {
-       const legacyQuery = query(collection(db, "events"), where("organizerId", "==", eoId));
-       eventsSnapshot = await getDocs(legacyQuery); 
-    }
+    // A. Ambil Event dengan 'eoId' (Data Baru)
+    const qNew = query(collection(db, "events"), where("eoId", "==", eoId));
     
-    const eoEventIds = eventsSnapshot.docs.map(doc => doc.id);
+    // B. Ambil Event dengan 'organizerId' (Data Lama)
+    const qLegacy = query(collection(db, "events"), where("organizerId", "==", eoId));
 
-    if (eoEventIds.length === 0) return []; 
-
-    // B. Ambil Transaksi Lunas
-    const transQuery = query(
-      collection(db, "transactions"),
-      where("status", "in", ["settlement", "capture"]),
-      orderBy("transactionTime", "asc")
-    );
-
-    const transSnapshot = await getDocs(transQuery);
+    // Jalankan KEDUANYA secara paralel
+    const [snapNew, snapLegacy] = await Promise.all([getDocs(qNew), getDocs(qLegacy)]);
     
-    // Filter manual transaction milik EO ini
-    const eoTransactions = transSnapshot.docs
-      .map(doc => doc.data())
-      .filter((t: any) => eoEventIds.includes(t.eventId));
+    // Gabungkan semua ID Event yang ditemukan (Gunakan Set biar unik)
+    const eventIdsSet = new Set<string>();
+    snapNew.forEach(doc => eventIdsSet.add(doc.id));
+    snapLegacy.forEach(doc => eventIdsSet.add(doc.id));
 
-    // C. Kelompokkan Data per Bulan
-    // Kita tambahkan properti 'count' untuk menghitung jumlah tiket
+    const myEventIds = Array.from(eventIdsSet);
+
+    // Jika tidak punya event sama sekali, return kosong
+    if (myEventIds.length === 0) return []; 
+
+    // C. Ambil Transaksi Per Event
+    const allTransactions: any[] = [];
+    
+    await Promise.all(myEventIds.map(async (eventId) => {
+        const qTrans = query(
+            collection(db, "transactions"),
+            where("eventId", "==", eventId),
+            where("status", "in", ["settlement", "capture"]) // Hanya yang LUNAS
+        );
+        const transSnap = await getDocs(qTrans);
+        
+        transSnap.forEach((doc) => {
+            allTransactions.push(doc.data());
+        });
+    }));
+
+    // D. Kelompokkan Data per Bulan
     const monthlyData = [
       { name: 'Jan', total: 0, count: 0 }, { name: 'Feb', total: 0, count: 0 }, 
       { name: 'Mar', total: 0, count: 0 }, { name: 'Apr', total: 0, count: 0 }, 
@@ -207,19 +214,26 @@ export const getEOSalesStats = async (eoId: string) => {
       { name: 'Nov', total: 0, count: 0 }, { name: 'Des', total: 0, count: 0 },
     ];
 
-    eoTransactions.forEach((t: any) => {
+    allTransactions.forEach((t: any) => {
       let date;
-      if (t.transactionTime?.toDate) {
-        date = t.transactionTime.toDate(); 
-      } else {
-        date = new Date(t.transactionTime); 
+      // Parsing Tanggal (Support String & Timestamp)
+      if (t.transactionTime) {
+         if (typeof t.transactionTime === 'string') {
+            const safeString = t.transactionTime.replace(' ', 'T');
+            date = new Date(safeString);
+         } else if (t.transactionTime.toDate) {
+            date = t.transactionTime.toDate();
+         }
+      } else if (t.createdAt) {
+         date = t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
       }
 
-      const monthIndex = date.getMonth(); 
-      
-      if (monthIndex >= 0 && monthIndex <= 11) {
-        monthlyData[monthIndex].total += Number(t.amount); 
-        monthlyData[monthIndex].count += (t.qty || 1); // Tambah jumlah tiket (default 1 jika field qty ga ada)
+      if (date && !isNaN(date.getTime())) {
+          const monthIndex = date.getMonth(); 
+          if (monthIndex >= 0 && monthIndex <= 11) {
+            monthlyData[monthIndex].total += Number(t.amount || 0); 
+            monthlyData[monthIndex].count += Number(t.qty || 1); 
+          }
       }
     });
 
