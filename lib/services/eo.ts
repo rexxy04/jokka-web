@@ -1,6 +1,7 @@
+// lib/services/eo.ts
 import { auth, db, storage } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, query, where, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, query, where, collection, getDocs, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // Definisi Tipe Data agar TypeScript senang
@@ -17,6 +18,23 @@ export interface EOFiles {
   [key: string]: File | null;
 }
 
+// Interface Data Event (Sesuaikan jika perlu)
+export interface EventData {
+  id: string;
+  title: string;
+  category: string;
+  startDate: string;
+  locationName: string;
+  status: string;
+  tickets: any[];
+  posterUrl?: string;
+  poster?: string;
+  sold?: number;
+  realSold?: number;
+  createdAt: any;
+}
+
+// --- SERVICE: REGISTER EO ---
 export const registerEO = async (formData: EOFormData, files: EOFiles) => {
   try {
     // 1. Buat Akun di Authentication
@@ -70,127 +88,112 @@ export const registerEO = async (formData: EOFormData, files: EOFiles) => {
   }
 };
 
-// --- SERVICE: AMBIL EVENT MILIK EO ---
-export const getMyEvents = async (eoId: string) => {
-  try {
-    // Ambil event dimana organizerId == eoId
-    const q = query(collection(db, "events"), where("organizerId", "==", eoId));
-    const querySnapshot = await getDocs(q);
-
-    const events: any[] = [];
-    querySnapshot.forEach((doc) => {
-      events.push({ id: doc.id, ...doc.data() });
-    });
-
-    // Sort manual di client (Biar gak perlu bikin index Firestore dulu)
-    // Urutkan dari yang paling baru dibuat
-    return events.sort((a, b) => b.createdAt - a.createdAt);
-
-  } catch (error) {
-    console.error("Error fetching my events:", error);
-    return [];
-  }
-};
-
-// --- SERVICE DASHBOARD STATS ---
+/**
+ * 1. GET EO STATS (Dashboard Cards)
+ */
 export const getEOStats = async (eoId: string) => {
   try {
-    // Ambil semua event milik EO ini
-    const q = query(collection(db, "events"), where("organizerId", "==", eoId));
-    const querySnapshot = await getDocs(q);
+    // Gunakan query sederhana dulu tanpa orderBy untuk hitung statistik
+    // agar menghindari masalah Indexing yang belum dibuat
+    const q = query(collection(db, "events"), where("eoId", "==", eoId));
+    let snapshot = await getDocs(q);
 
-    let totalEvents = 0;
-    let ticketsSold = 0;
-    let totalRevenue = 0;
-    let pendingEvents = 0;
+    // Fallback support field lama 'organizerId'
+    if (snapshot.empty) {
+        const qLegacy = query(collection(db, "events"), where("organizerId", "==", eoId));
+        snapshot = await getDocs(qLegacy);
+    }
 
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      totalEvents++;
+    const events = snapshot.docs.map(doc => doc.data());
 
-      // Hitung Tiket Terjual & Pendapatan dari data Event
-      if (data.tickets && data.tickets.length > 0) {
-        const sold = data.tickets[0].sold || 0;
-        const price = data.tickets[0].price || 0;
-        
-        ticketsSold += sold;
-        totalRevenue += (sold * price);
-      }
-
-      // Hitung Event yang masih Pending Review
-      if (data.status === 'pending_review') {
-        pendingEvents++;
-      }
-    });
-
+    const totalEvents = events.length;
+    const pendingEvents = events.filter(e => e.status === 'pending' || e.status === 'pending_review').length;
+    
+    // Note: Revenue & Sold dihitung ulang di frontend via transaction service
+    // agar lebih akurat (sesuai perbaikan sebelumnya)
+    
     return {
       totalEvents,
-      ticketsSold,
-      totalRevenue,
+      ticketsSold: 0, // Placeholder, diupdate di UI
+      totalRevenue: 0, // Placeholder, diupdate di UI
       pendingEvents
     };
-
   } catch (error) {
     console.error("Error fetching EO stats:", error);
     return { totalEvents: 0, ticketsSold: 0, totalRevenue: 0, pendingEvents: 0 };
   }
 };
 
-// --- SERVICE: LAPORAN PENJUALAN ---
-export const getEOSalesReport = async (eoId: string) => {
+/**
+ * 2. GET MY EVENTS (List Semua Event EO) [FIXED MERGE]
+ * Mengambil data dari 'eoId' DAN 'organizerId' lalu digabung.
+ */
+export const getMyEvents = async (eoId: string): Promise<EventData[]> => {
   try {
-    // 1. Ambil semua Event ID milik EO ini
-    const qEvents = query(collection(db, "events"), where("organizerId", "==", eoId));
-    const eventsSnap = await getDocs(qEvents);
+    // 1. Ambil data dengan schema baru (eoId)
+    const qNew = query(collection(db, "events"), where("eoId", "==", eoId));
     
-    // Kita buat Map: { 'event_id_1': 'Nama Event 1', ... } biar gampang lookup
-    const myEventIds: string[] = [];
-    const eventNames: { [key: string]: string } = {};
+    // 2. Ambil data dengan schema lama (organizerId)
+    const qLegacy = query(collection(db, "events"), where("organizerId", "==", eoId));
 
-    eventsSnap.forEach((doc) => {
-      myEventIds.push(doc.id);
-      eventNames[doc.id] = doc.data().title;
+    // Jalankan keduanya secara paralel
+    const [snapNew, snapLegacy] = await Promise.all([
+        getDocs(qNew),
+        getDocs(qLegacy)
+    ]);
+
+    // 3. Gabungkan hasil & Hapus Duplikat (jika ada)
+    // Kita pakai Map untuk memastikan ID unik
+    const eventsMap = new Map();
+
+    snapLegacy.docs.forEach(doc => {
+        eventsMap.set(doc.id, { id: doc.id, ...doc.data() });
     });
 
-    if (myEventIds.length === 0) return []; // Belum punya event, berarti belum ada sales
+    snapNew.docs.forEach(doc => {
+        eventsMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
 
-    // 2. Ambil Transaksi berdasarkan Event ID
-    // (Note: Firestore 'in' query max 10 item. Untuk skala besar, logic ini harus diubah)
-    // Untuk sekarang kita ambil semua transaksi lalu filter di client (User base masih kecil)
-    // Atau loop per event jika event sedikit. 
-    // Kita pakai cara aman: Fetch all transactions yg punya eventId (agak berat tapi akurat untuk MVP)
-    
-    // Cara Alternatif Lebih Efisien untuk MVP:
-    // Query Transactions where eventId IN [list_id] (Kita batch per 10)
-    
-    const transactionsRef = collection(db, "transactions");
-    // Kita ambil semua transaksi yang eventId-nya ada di list myEventIds
-    // Karena keterbatasan Firestore, kita filter manual di client side setelah fetch yang relevan
-    // atau fetch per event.
-    
-    // STRATEGI FETCH PER EVENT (Lebih aman untuk struktur data saat ini)
-    const allSales: any[] = [];
-    
-    for (const eventId of myEventIds) {
-      const qTrans = query(
-        transactionsRef, 
-        where("eventId", "==", eventId),
-        where("status", "==", "settlement") // Hanya ambil yang SUKSES bayar (LUNAS)
-      );
-      const transSnap = await getDocs(qTrans);
-      
-      transSnap.forEach((doc) => {
-        const data = doc.data();
-        allSales.push({
-          id: doc.id,
-          ...data,
-          eventName: eventNames[data.eventId] // Pastikan nama event terisi
-        });
-      });
-    }
+    // Konversi Map kembali ke Array
+    const events = Array.from(eventsMap.values()) as EventData[];
 
-    // Urutkan dari yang terbaru
-    return allSales.sort((a, b) => b.createdAt - a.createdAt);
+    // 4. Sort Manual (Client Side) - Terbaru di atas
+    return events.sort((a: any, b: any) => {
+        const dateA = a.createdAt?.seconds || 0;
+        const dateB = b.createdAt?.seconds || 0;
+        return dateB - dateA; 
+    });
+
+  } catch (error) {
+    console.error("Error fetching my events:", error);
+    return [];
+  }
+};
+/**
+ * 3. GET EO SALES REPORT (Raw Transaction Data)
+ */
+export const getEOSalesReport = async (eoId: string) => {
+  try {
+    // 1. Ambil ID Event milik EO
+    const events = await getMyEvents(eoId);
+    const eventIds = events.map(e => e.id);
+
+    if (eventIds.length === 0) return [];
+
+    // 2. Ambil Transaksi yang sukses
+    const qTrans = query(
+        collection(db, "transactions"),
+        where("status", "in", ["settlement", "capture"]),
+        orderBy("transactionTime", "desc")
+    );
+    const transSnap = await getDocs(qTrans);
+
+    // 3. Filter milik EO ini
+    const sales = transSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(t => eventIds.includes(t.eventId));
+
+    return sales;
 
   } catch (error) {
     console.error("Error fetching sales report:", error);

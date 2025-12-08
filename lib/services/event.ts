@@ -1,3 +1,4 @@
+// lib/services/event.ts
 import { 
   collection, 
   addDoc, 
@@ -19,7 +20,7 @@ export interface TicketData {
   name: string;
   price: number;
   stock: number;
-  sold?: number; // Optional: untuk tracking terjual
+  sold?: number; 
 }
 
 // Data dari Form Input
@@ -30,7 +31,7 @@ export interface EventFormData {
   locationName: string;
   lat: number;
   lng: number;
-  startDate: string; // Format string dari input datetime-local
+  startDate: string; 
   endDate: string;
   tickets: TicketData[];
 }
@@ -38,9 +39,9 @@ export interface EventFormData {
 // Data Lengkap yang disimpan di Firebase
 export interface EventData extends EventFormData {
   id: string;
-  posterUrl: string;
-  poster?: string;
-  status: 'pending' | 'published' | 'rejected';
+  posterUrl?: string; // update: optional
+  poster?: string;    // update: optional (support legacy)
+  status: 'pending' | 'published' | 'approved' | 'rejected'; // update: tambah 'approved'
   eoId: string;
   createdAt: any;
   rejectionReason?: string;
@@ -50,30 +51,24 @@ export interface EventData extends EventFormData {
 
 /**
  * 1. CREATE EVENT (Khusus EO)
- * Mengupload poster ke Storage dan menyimpan data event ke Firestore.
  */
 export const createEvent = async (formData: EventFormData, posterFile: File, eoId: string) => {
   try {
-    // A. Upload Poster
-    // Path: events/{eoId}/{timestamp_filename}
     const filename = `${Date.now()}_${posterFile.name}`;
     const storageRef = ref(storage, `events/${eoId}/${filename}`);
     
     const snapshot = await uploadBytes(storageRef, posterFile);
     const downloadURL = await getDownloadURL(snapshot.ref);
 
-    // B. Siapkan Data Firestore
     const newEvent = {
       ...formData,
       posterUrl: downloadURL,
       eoId: eoId,
-      status: 'pending', // Default status pending, nunggu admin
+      status: 'pending', 
       createdAt: serverTimestamp(),
-      // Inisialisasi sold = 0 untuk setiap tiket
       tickets: formData.tickets.map(t => ({ ...t, sold: 0 }))
     };
 
-    // C. Simpan ke Collection 'events'
     const docRef = await addDoc(collection(db, "events"), newEvent);
     return docRef.id;
 
@@ -85,7 +80,6 @@ export const createEvent = async (formData: EventFormData, posterFile: File, eoI
 
 /**
  * 2. GET EO EVENTS (Khusus EO Dashboard)
- * Mengambil semua event milik EO tertentu (baik pending/oublished/rejected).
  */
 export const getEOEvents = async (eoId: string): Promise<EventData[]> => {
   try {
@@ -107,23 +101,44 @@ export const getEOEvents = async (eoId: string): Promise<EventData[]> => {
 };
 
 /**
- * 3. GET PUBLIC EVENTS (Halaman Public)
- * Hanya mengambil event yang statusnya 'published'.
- * Diurutkan berdasarkan tanggal mulai event (startDate).
+ * 3. GET PUBLIC EVENTS (Halaman Public) [FIXED]
+ * Mengambil event yang statusnya 'approved' ATAU 'published' (Support legacy).
  */
 export const getPublicEvents = async (): Promise<EventData[]> => {
   try {
-    const q = query(
+    // 1. Coba ambil yang status 'approved' (Format baru)
+    const qApproved = query(
+      collection(db, "events"),
+      where("status", "==", "approved"),
+      orderBy("startDate", "asc")
+    );
+
+    // 2. Coba ambil yang status 'published' (Format lama)
+    const qPublished = query(
       collection(db, "events"),
       where("status", "==", "published"),
       orderBy("startDate", "asc")
     );
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as EventData));
+    const [snapApproved, snapPublished] = await Promise.all([
+        getDocs(qApproved), 
+        getDocs(qPublished)
+    ]);
+
+    // Gabungkan hasil (Merge)
+    const eventsMap = new Map();
+    snapPublished.docs.forEach(doc => eventsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+    snapApproved.docs.forEach(doc => eventsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    const events = Array.from(eventsMap.values()) as EventData[];
+
+    // Sort lagi manual (asc date) agar urutannya benar setelah di-merge
+    return events.sort((a: any, b: any) => {
+        const dateA = new Date(a.startDate).getTime();
+        const dateB = new Date(b.startDate).getTime();
+        return dateA - dateB; 
+    });
+
   } catch (error) {
     console.error("Error fetching public events:", error);
     return [];
@@ -132,7 +147,6 @@ export const getPublicEvents = async (): Promise<EventData[]> => {
 
 /**
  * 4. GET EVENT BY ID (Halaman Detail)
- * Mengambil detail satu event berdasarkan ID.
  */
 export const getEventById = async (id: string): Promise<EventData | null> => {
   try {
@@ -151,21 +165,25 @@ export const getEventById = async (id: string): Promise<EventData | null> => {
 };
 
 /**
- * 5. GET EVENTS BY MONTH (Kalender Event)
- * @param year Tahun (ex: 2025)
- * @param month Bulan (1-12)
+ * 5. GET EVENTS BY MONTH (Kalender Event) [FIXED]
  */
 export const getEventsByMonth = async (year: number, month: number): Promise<EventData[]> => {
   try {
-    // Format tanggal awal bulan: "YYYY-MM-01"
     const startStr = `${year}-${String(month).padStart(2, '0')}-01`;
-    
-    // Cari tanggal terakhir bulan tersebut
     const lastDay = new Date(year, month, 0).getDate();
-    // Format tanggal akhir bulan: "YYYY-MM-DDTHH:mm" (sampai detik terakhir)
     const endStr = `${year}-${String(month).padStart(2, '0')}-${lastDay}T23:59`;
 
-    const q = query(
+    // Ambil Approved
+    const qApproved = query(
+      collection(db, "events"),
+      where("status", "==", "approved"),
+      where("startDate", ">=", startStr),
+      where("startDate", "<=", endStr),
+      orderBy("startDate", "asc")
+    );
+
+    // Ambil Published (Legacy)
+    const qPublished = query(
       collection(db, "events"),
       where("status", "==", "published"),
       where("startDate", ">=", startStr),
@@ -173,11 +191,23 @@ export const getEventsByMonth = async (year: number, month: number): Promise<Eve
       orderBy("startDate", "asc")
     );
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as EventData));
+    const [snapApproved, snapPublished] = await Promise.all([
+        getDocs(qApproved), 
+        getDocs(qPublished)
+    ]);
+
+    const eventsMap = new Map();
+    snapPublished.docs.forEach(doc => eventsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+    snapApproved.docs.forEach(doc => eventsMap.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    const events = Array.from(eventsMap.values()) as EventData[];
+
+    return events.sort((a: any, b: any) => {
+        const dateA = new Date(a.startDate).getTime();
+        const dateB = new Date(b.startDate).getTime();
+        return dateA - dateB;
+    });
+
   } catch (error) {
     console.error("Error fetching calendar events:", error);
     return [];
