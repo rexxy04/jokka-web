@@ -3,11 +3,18 @@
 import React, { useEffect, useState } from 'react';
 import Button from '@/components/ui/Button';
 import { getPendingEvents, approveEvent, rejectEvent, EventData } from '@/lib/services/admin';
+import StatusModal from '@/components/ui/StatusModal'; // 1. Import StatusModal
 
 export default function EventApprovalPage() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // 2. State untuk Modal
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ 
+    title: '', message: '', type: 'success' 
+  });
 
   useEffect(() => {
     fetchData();
@@ -25,10 +32,19 @@ export default function EventApprovalPage() {
     setProcessingId(id);
     try {
       await approveEvent(id);
-      alert("Event Berhasil Ditayangkan! 🚀");
+      
+      // GANTI ALERT DENGAN MODAL
+      setModalContent({
+        title: "Event Ditayangkan! 🚀",
+        message: `Event "${title}" berhasil diapprove dan sekarang live di website publik.`,
+        type: 'success'
+      });
+      setShowModal(true);
+      
       fetchData(); // Refresh list
     } catch (error) {
-      alert("Gagal memproses");
+      setModalContent({ title: "Gagal", message: "Terjadi kesalahan sistem.", type: 'error' });
+      setShowModal(true);
     } finally {
       setProcessingId(null);
     }
@@ -39,10 +55,19 @@ export default function EventApprovalPage() {
     setProcessingId(id);
     try {
       await rejectEvent(id);
-      alert("Event Ditolak ❌");
+      
+      // GANTI ALERT DENGAN MODAL
+      setModalContent({
+        title: "Event Ditolak ❌",
+        message: `Event "${title}" telah ditolak.`,
+        type: 'success' // Sukses menolak
+      });
+      setShowModal(true);
+
       fetchData();
     } catch (error) {
-      alert("Gagal memproses");
+      setModalContent({ title: "Gagal", message: "Gagal menolak event.", type: 'error' });
+      setShowModal(true);
     } finally {
       setProcessingId(null);
     }
@@ -74,10 +99,12 @@ export default function EventApprovalPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map((event) => (
             <div key={event.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col">
-              {/* Poster Preview */}
+              
+              {/* Poster Preview (FIX IMAGE SOURCE) */}
               <div className="h-48 bg-gray-100 relative group">
                 <img 
-                  src={event.poster} 
+                  // Prioritaskan posterUrl (schema baru), fallback ke poster (schema lama)
+                  src={event.posterUrl || event.poster || '/placeholder-event.jpg'} 
                   alt={event.title} 
                   className="w-full h-full object-cover"
                 />
@@ -91,10 +118,10 @@ export default function EventApprovalPage() {
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 mb-1 line-clamp-1" title={event.title}>{event.title}</h3>
                   <p className="text-xs text-gray-500 flex items-center gap-1 mb-2">
-                    📍 {event.locationName}
+                    📍 {event.locationName || "Lokasi tidak tersedia"}
                   </p>
                   <p className="text-xs text-indigo-600 font-medium bg-indigo-50 inline-block px-2 py-1 rounded mb-4">
-                    📅 {new Date(event.startDate).toLocaleString('id-ID')}
+                    📅 {event.startDate ? new Date(event.startDate).toLocaleString('id-ID') : "-"}
                   </p>
                 </div>
                 
@@ -105,7 +132,7 @@ export default function EventApprovalPage() {
                     className="flex-1 bg-green-600 hover:bg-green-700 text-xs py-2 shadow-none border-0"
                     disabled={processingId === event.id}
                   >
-                    Tayangkan
+                    {processingId === event.id ? "..." : "Tayangkan"}
                   </Button>
                   <Button 
                     onClick={() => handleReject(event.id, event.title)}
@@ -121,6 +148,15 @@ export default function EventApprovalPage() {
           ))}
         </div>
       )}
+
+      {/* 3. Render Modal */}
+      <StatusModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        title={modalContent.title}
+        message={modalContent.message}
+        type={modalContent.type}
+      />
     </div>
   );
 }
