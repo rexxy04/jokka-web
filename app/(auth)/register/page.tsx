@@ -7,7 +7,6 @@ import AuthCard from '@/components/public/AuthCard';
 import Input from '@/components/ui/input';
 import Button from '@/components/ui/Button';
 import { registerUserService, loginWithGoogle } from '@/lib/services/auth';
-// 1. Pastikan StatusModal yang diimport adalah versi terbaru (yang ada props type)
 import StatusModal from '@/components/ui/StatusModal';
 
 export default function RegisterPage() {
@@ -25,11 +24,8 @@ export default function RegisterPage() {
 
   // State Modal
   const [showModal, setShowModal] = useState(false);
-  // 2. UPDATE STATE: Tambahkan field 'type'
   const [modalContent, setModalContent] = useState<{title: string, message: string, type: 'success' | 'error'}>({ 
-    title: '', 
-    message: '', 
-    type: 'success' 
+    title: '', message: '', type: 'success' 
   });
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -42,7 +38,6 @@ export default function RegisterPage() {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      // 3. SET TYPE 'ERROR' SAAT GAGAL
       setModalContent({
         title: "Password Tidak Cocok",
         message: "Pastikan password dan konfirmasi password Anda sama.",
@@ -58,17 +53,17 @@ export default function RegisterPage() {
     try {
       await registerUserService(formData);
 
-      // 4. SET TYPE 'SUCCESS' SAAT BERHASIL
+      // --- PERUBAHAN DISINI (PESAN VERIFIKASI) ---
       setModalContent({
-        title: "Pendaftaran Berhasil! 🎉",
-        message: "Akun Anda telah dibuat. Silakan cek email Anda untuk verifikasi sebelum login.",
+        title: "Cek Email Anda 📧",
+        message: `Link verifikasi telah dikirim ke ${formData.email}. Silakan cek inbox atau folder spam Anda dan klik link tersebut untuk mengaktifkan akun sebelum login.`,
         type: 'success'
       });
-      setIsSuccess(true); 
+      
+      setIsSuccess(true); // Agar saat ditutup, user diarahkan ke halaman Login
       setShowModal(true);
 
     } catch (error: any) {
-      // 5. SET TYPE 'ERROR' SAAT GAGAL
       setModalContent({
         title: "Gagal Mendaftar",
         message: error.message || "Terjadi kesalahan saat mendaftarkan akun.",
@@ -91,13 +86,9 @@ export default function RegisterPage() {
       else router.push('/');
       
     } catch (error: any) {
-      // 6. SET TYPE 'ERROR' SAAT GAGAL
+      // Ignore jika user menutup popup
+      if (error.code === 'auth/popup-closed-by-user') return;
 
-      if (error.code === 'auth/popup-closed-by-user') {
-        return;
-      }
-
-      
       setModalContent({ 
         title: "Gagal Mendaftar", 
         message: "Terjadi kesalahan saat mencoba mendaftar dengan Google.",
@@ -111,6 +102,7 @@ export default function RegisterPage() {
   // Handler saat modal ditutup
   const handleCloseModal = () => {
     setShowModal(false);
+    // Jika sukses register, arahkan ke login agar user bisa login setelah verifikasi email
     if (isSuccess) {
         router.push('/login'); 
     }
@@ -205,13 +197,13 @@ export default function RegisterPage() {
         </div>
       </form>
 
-      {/* 7. PASS PROPS TYPE KE MODAL */}
+      {/* Render Modal */}
       <StatusModal 
         isOpen={showModal} 
         onClose={handleCloseModal} 
         title={modalContent.title}
         message={modalContent.message}
-        type={modalContent.type} // <-- Penting agar icon berubah
+        type={modalContent.type}
       />
     </AuthCard>
   );
