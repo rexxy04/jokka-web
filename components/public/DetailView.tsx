@@ -226,6 +226,12 @@ const DetailView: React.FC<DetailViewProps> = ({
     }
   };
 
+  const mapEmbedUrl = lat && lng 
+  ? `https://www.google.com/maps?q=${lat},${lng}&z=15&output=embed`
+  : location
+    ? `https://www.google.com/maps?q=${encodeURIComponent(location)}&z=15&output=embed`
+    : null;
+
   // Handler Tutup Modal
   const handleCloseModal = () => {
       setShowModal(false);
@@ -374,6 +380,19 @@ const DetailView: React.FC<DetailViewProps> = ({
                 📍 Lihat Lokasi Peta
               </Button>
             </div>
+
+            {/* IFRAME GOOGLE MAPS */}
+            {mapEmbedUrl && (
+              <div className="mt-4 w-full h-[250px] rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                <iframe
+                  src={mapEmbedUrl}
+                  className="w-full h-full"
+                  loading="lazy"
+                  allowFullScreen
+                />
+              </div>
+            )}
+
           </div>
         </div>
       </div>
