@@ -81,7 +81,7 @@ function MapWithSearch({ onLocationSelect }: LocationPickerProps) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           disabled={!ready}
-          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
           placeholder="Cari lokasi (contoh: Phinisi Point)..."
         />
         {/* Dropdown Suggestion */}
@@ -91,7 +91,7 @@ function MapWithSearch({ onLocationSelect }: LocationPickerProps) {
               <li
                 key={place_id}
                 onClick={() => handleSelectAddress(description)}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-900"
               >
                 {description}
               </li>
